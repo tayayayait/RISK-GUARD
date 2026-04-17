@@ -1,0 +1,95 @@
+
+ RUN  v4.1.3 C:/Users/dbcdk/Desktop/RISK GUARD
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps storage law basis per hazard when strict context matches
+[LegalBasis] candidates: [33m2[39m lawItems: [33m2[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > distributes legal basis across rows when eligible alternatives exist
+[LegalBasis] candidates: [33m2[39m lawItems: [33m2[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty legal basis when strict confidence is not met
+[LegalBasis] candidates: [33m64[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > allows legal basis reuse when no alternative article is eligible
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only actionItems exist without storage article title cross-check
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m1[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > supplies missing storage title using fallback map and successfully returns strict format
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only context hint exists without work/equipment token matches
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > prefers storage evidence over action candidate when both are eligible
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m1[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > normalizes work process/category and appends article title in legal basis
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps chemical to environment and noise-dust-repetitive to task-characteristic
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > builds complete per-row measures, suppresses duplicates, and keeps length within 60
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m0[39m
+
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps storage law basis per hazard when strict context matches 12ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > distributes legal basis across rows when eligible alternatives exist 3ms
+ × src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty legal basis when strict confidence is not met 8ms
+   → expected '산업안전보건기준에 관한 규칙 제57조(비계 등의 조립·해체 및 변경)' to be '' // Object.is equality
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > allows legal basis reuse when no alternative article is eligible 1ms
+ × src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only actionItems exist without storage article title cross-check 4ms
+   → expected '산업안전보건기준에 관한 규칙 제243조(소화설비)' to be '' // Object.is equality
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > supplies missing storage title using fallback map and successfully returns strict format 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only context hint exists without work/equipment token matches 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > prefers storage evidence over action candidate when both are eligible 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > normalizes work process/category and appends article title in legal basis 2ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps chemical to environment and noise-dust-repetitive to task-characteristic 2ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > reclassifies rows with priority: electrical > management > human > hazard-type 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > builds complete per-row measures, suppresses duplicates, and keeps length within 60 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty legal basis when strict confidence is not met
+AssertionError: expected '산업안전보건기준에 관한 규칙 제57조(비계 등의 조립·해체 및 변경)' to be '' // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[31m+ 산업안전보건기준에 관한 규칙 제57조(비계 등의 조립·해체 및 변경)[39m
+
+ ❯ src/test/formServiceRiskLegalBasis.test.ts:150:24
+    148|     );
+    149|
+    150|     expect(legalBasis).toBe("");
+       |                        ^
+    151|   });
+    152|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only actionItems exist without storage article title cross-check
+AssertionError: expected '산업안전보건기준에 관한 규칙 제243조(소화설비)' to be '' // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[31m+ 산업안전보건기준에 관한 규칙 제243조(소화설비)[39m
+
+ ❯ src/test/formServiceRiskLegalBasis.test.ts:223:24
+    221|     );
+    222|
+    223|     expect(legalBasis).toBe("");
+       |                        ^
+    224|   });
+    225|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 10 passed (12)
+   Start at  12:18:59
+   Duration  5.00s (transform 225ms, setup 369ms, import 314ms, tests 41ms, environment 2.77s)
+

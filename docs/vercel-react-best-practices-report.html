@@ -1,0 +1,244 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RISK GUARD - Vercel React Best Practices 작업 보고서</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --line: #dbe2ee;
+      --ok: #065f46;
+      --warn: #92400e;
+      --risk: #991b1b;
+      --accent: #1d4ed8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans KR", "Malgun Gothic", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 28px auto;
+      padding: 0 16px 40px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+    h1, h2 { margin: 0 0 12px; }
+    h1 { font-size: 26px; }
+    h2 { font-size: 18px; }
+    p { margin: 0 0 8px; }
+    ul { margin: 8px 0 0 20px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 10px;
+    }
+    th { background: #eef3ff; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .risk { color: var(--risk); font-weight: 700; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background: #eff3fa;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      background: #f8fafc;
+    }
+    .accent { color: var(--accent); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>RISK GUARD 성능 작업 보고서 (HTML)</h1>
+      <p class="meta">기준: <span class="accent">$vercel-react-best-practices</span> / 작성일: 2026-04-15</p>
+      <p class="meta">범위: 초기 번들/라우트 분할 최적화 이후, 추가 작업 우선순위 및 리스크 평가</p>
+    </section>
+
+    <section class="card">
+      <h2>1) 확정된 현재 상태</h2>
+      <ul>
+        <li>라우트 단위 <span class="mono">React.lazy + Suspense</span> 적용 완료.</li>
+        <li>PDF 관련 의존성 분리 적용: <span class="mono">jspdf</span>, <span class="mono">html2canvas</span>.</li>
+        <li>번들 기록 문서 기준 메인 엔트리: <span class="mono">1,250.59 kB → 221.69 kB</span>.</li>
+        <li>잔여 경고: <span class="mono">없음</span> (500 kB 초과 경고 제거).</li>
+        <li>문서 기준 제거된 경고: <span class="mono">jspdf dynamically imported but also statically imported</span>.</li>
+      </ul>
+      <p class="meta">근거 파일: docs/bundle-performance.md, src/App.tsx, vite.config.ts</p>
+    </section>
+
+    <section class="card">
+      <h2>진행 상태 (2026-04-15)</h2>
+      <ul>
+        <li><strong>P0</strong> vendor-pdf 추가 분할: <span class="ok">완료</span> (500k 초과 경고 해소)</li>
+        <li><strong>P1</strong> Suspense 경계 세분화: <span class="ok">완료</span> (전역 1개 경계 -> 라우트 단위 경계)</li>
+        <li><strong>P1</strong> 다음 라우트 예측 프리로드: <span class="ok">완료</span> (Sidebar/StepRail hover/focus/touch preload)</li>
+        <li><strong>P2</strong> 대형 페이지 리렌더 점검: <span class="warn">부분 완료</span> (AccidentPrediction + AnalysisResult + FormEditor 저위험 최적화 2차 반영)</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>2) 우선순위 및 상태</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>우선순위</th>
+            <th>Vercel 규칙</th>
+            <th>작업 내용</th>
+            <th>완료 기준</th>
+            <th>예상 리스크</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>P0</strong><br/><span class="ok">완료</span></td>
+            <td><span class="mono">bundle-conditional</span><br/><span class="mono">bundle-dynamic-imports</span></td>
+            <td>
+              <strong>vendor-pdf 추가 분할</strong><br/>
+              완료: PDF 다운로드 시점에만 <span class="mono">jspdf/html2canvas</span>를 개별 로드하도록 분리 적용.
+            </td>
+            <td>
+              <span class="mono">pnpm build</span>에서 500k 초과 경고 제거 확인.
+            </td>
+            <td class="ok">낮음</td>
+          </tr>
+          <tr>
+            <td><strong>P1</strong><br/><span class="ok">완료</span></td>
+            <td><span class="mono">async-suspense-boundaries</span></td>
+            <td>
+              <strong>Suspense 경계 세분화</strong><br/>
+              완료: 전역 경계를 페이지 단위 경계로 분리해 fallback 노출 범위를 축소.
+            </td>
+            <td>
+              라우트 전환 시 전체 화면 로딩 빈도 감소 + 기능 회귀 없음(테스트 통과).
+            </td>
+            <td class="ok">낮음</td>
+          </tr>
+          <tr>
+            <td><strong>P1</strong><br/><span class="ok">완료</span></td>
+            <td><span class="mono">bundle-preload</span></td>
+            <td>
+              <strong>다음 라우트 예측 프리로드</strong><br/>
+              완료: 다음 단계 페이지를 hover/focus/touch 시 preload.
+            </td>
+            <td>
+              초기 진입 성능 악화 없이 라우트 전환 체감 개선(구현/빌드 검증 완료).
+            </td>
+            <td class="ok">낮음</td>
+          </tr>
+          <tr>
+            <td><strong>P2</strong><br/><span class="warn">진행중</span></td>
+            <td><span class="mono">rerender-memo</span><br/><span class="mono">rerender-dependencies</span></td>
+            <td>
+              <strong>대형 페이지 렌더링 점검</strong><br/>
+              <span class="mono">AnalysisResult/FormEditor/AccidentPrediction</span> 중심으로 저위험 메모화/핸들러 안정화 반영 완료. Profiler 계측 기반 추가 최적화는 잔여.
+            </td>
+            <td>
+              React Profiler 기준 불필요 commit 감소 확인(추가 계측 필요).
+            </td>
+            <td class="warn">낮음~중간</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3) 구조/성능이 망가질 수 있는지 여부</h2>
+      <p><span class="risk">판정: 예, 망가질 수 있음(조건부).</span> 다만 현재 확인 범위에서는 즉시 붕괴 증거는 없음.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>위험 시나리오</th>
+            <th>영향</th>
+            <th>가능성</th>
+            <th>현 상태</th>
+            <th>통제 방법</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>과도한 청크 분할</td>
+            <td>요청 수 증가로 체감 성능 저하(워터폴)</td>
+            <td>낮음~중간</td>
+            <td>500k 초과 경고 제거, 주요 vendor 분리 완료</td>
+            <td>RUM/네트워크 waterfall 모니터링 유지</td>
+          </tr>
+          <tr>
+            <td>Suspense 경계 오설계</td>
+            <td>전체 화면 fallback 증가, UX 저하</td>
+            <td>낮음</td>
+            <td>라우트 단위 경계 분리 완료</td>
+            <td>신규 화면 추가 시 전역 경계 회귀 여부 점검</td>
+          </tr>
+          <tr>
+            <td>동적 import 실패(네트워크/번들 경로)</td>
+            <td>PDF 내보내기 실패</td>
+            <td>낮음~중간</td>
+            <td>정적 혼합 import 문제는 제거됨</td>
+            <td>실패 fallback 메시지/재시도 로직 추가</td>
+          </tr>
+          <tr>
+            <td>Step/Provider 경계 변경 실수</td>
+            <td>단계 이동/권한 로직 깨짐</td>
+            <td>중간</td>
+            <td>현재 라우팅 로직은 유지됨</td>
+            <td>state-machine 회귀 테스트 유지, 단계 이동 E2E 추가</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>4) 데이터 공백</h2>
+      <p><strong>확실한 정보 없음</strong>:</p>
+      <ul>
+        <li>실사용자 RUM(Core Web Vitals) 분포 데이터</li>
+        <li>프로덕션 네트워크 조건별 chunk 로드 실패율</li>
+      </ul>
+      <p>즉, 현재 평가는 로컬 빌드/테스트 결과와 코드 구조 분석 기반이다.</p>
+    </section>
+
+    <section class="card">
+      <h2>5) 실행 체크리스트</h2>
+      <span class="tag">1. P0 vendor-pdf 분할 (완료)</span>
+      <span class="tag">2. Suspense 경계 세분화 (완료)</span>
+      <span class="tag">3. 프리로드 적용 (완료)</span>
+      <span class="tag">4. P2 Profiler 심화 계측 (잔여)</span>
+      <span class="tag">5. build + test + 문서 갱신 (완료)</span>
+      <p style="margin-top:10px" class="ok">현 시점 완료 판정: 빌드/테스트 통과 + 초기 번들 분할 목표 달성. 잔여 과제는 P2 Profiler 심화 계측.</p>
+    </section>
+  </main>
+</body>
+</html>

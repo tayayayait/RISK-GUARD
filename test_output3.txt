@@ -1,0 +1,78 @@
+
+ RUN  v4.1.3 C:/Users/dbcdk/Desktop/RISK GUARD
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps storage law basis per hazard when strict context matches
+[LegalBasis] candidates: [33m2[39m lawItems: [33m2[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > distributes legal basis across rows when eligible alternatives exist
+[LegalBasis] candidates: [33m2[39m lawItems: [33m2[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > falls back to hazard map when strict confidence is not met but fallback exists
+[LegalBasis] candidates: [33m64[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > allows legal basis reuse when no alternative article is eligible
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > uses fallback map when only actionItems exist without storage article title
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m1[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > supplies missing storage title using fallback map and successfully returns strict format
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only context hint exists without work/equipment token matches
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > prefers storage evidence over action candidate when both are eligible
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m1[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > extracts ambiguous hazard factor text like 가격/낙하 to correct taxonomy and uses fallback
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > normalizes work process/category and appends article title in legal basis
+[LegalBasis] candidates: [33m1[39m lawItems: [33m1[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps chemical to environment and noise-dust-repetitive to task-characteristic
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m0[39m
+
+stdout | src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > builds complete per-row measures, suppresses duplicates, and keeps length within 60
+[LegalBasis] candidates: [33m64[39m lawItems: [33m0[39m actionItems: [33m0[39m
+
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps storage law basis per hazard when strict context matches 15ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > distributes legal basis across rows when eligible alternatives exist 3ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > falls back to hazard map when strict confidence is not met but fallback exists 2ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > allows legal basis reuse when no alternative article is eligible 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > uses fallback map when only actionItems exist without storage article title 2ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > supplies missing storage title using fallback map and successfully returns strict format 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > returns empty when only context hint exists without work/equipment token matches 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > prefers storage evidence over action candidate when both are eligible 1ms
+ × src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > extracts ambiguous hazard factor text like 가격/낙하 to correct taxonomy and uses fallback 11ms
+   → expected '산업안전보건기준에 관한 규칙 제15조(투하설비 등)' to contain '제14조(낙하물에 의한 위험의 방지)'
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > normalizes work process/category and appends article title in legal basis 2ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > maps chemical to environment and noise-dust-repetitive to task-characteristic 3ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > reclassifies rows with priority: electrical > management > human > hazard-type 1ms
+ ✓ src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > builds complete per-row measures, suppresses duplicates, and keeps length within 60 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/test/formServiceRiskLegalBasis.test.ts > FormService risk legal basis mapping > extracts ambiguous hazard factor text like 가격/낙하 to correct taxonomy and uses fallback
+AssertionError: expected '산업안전보건기준에 관한 규칙 제15조(투하설비 등)' to contain '제14조(낙하물에 의한 위험의 방지)'
+
+Expected: [32m"제1[7m4[27m조([7m낙하물에 의한 위험의 방지[27m)"[39m
+Received: [31m"[7m산업안전보건기준에 관한 규칙 [27m제1[7m5[27m조([7m투하설비 등[27m)"[39m
+
+ ❯ src/test/formServiceRiskLegalBasis.test.ts:363:27
+    361|     // "공구 및 자재 낙하" -> 낙하물/비래 -> 제14조
+    362|     // "하부 통행자 가격" -> 낙하물/비래 -> 제15조 (이전에 제14조 썼으므로 두번째 후보)
+    363|     expect(legalBases[0]).toContain("제14조(낙하물에 의한 위험의 방지)");
+       |                           ^
+    364|     expect(legalBases[1]).toContain("제15조(투하설비 등)");
+    365|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Start at  12:30:39
+   Duration  3.48s (transform 187ms, setup 263ms, import 341ms, tests 49ms, environment 1.87s)
+

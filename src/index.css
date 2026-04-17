@@ -1,0 +1,123 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand colors (HSL) */
+    --primary-900: 210 57% 14%;
+    --primary-700: 207 67% 27%;
+    --primary-600: 207 66% 35%;
+    --primary-050: 207 60% 84%;
+    --accent-600: 25 100% 45%;
+    --accent-050: 30 100% 95%;
+
+    /* Neutral colors */
+    --neutral-900: 212 43% 13%;
+    --neutral-700: 215 25% 27%;
+    --neutral-500: 215 16% 47%;
+    --neutral-300: 214 32% 81%;
+    --neutral-200: 213 29% 88%;
+    --neutral-100: 210 28% 93%;
+    --neutral-050: 204 33% 97%;
+    --surface: 0 0% 100%;
+
+    /* Semantic */
+    --danger-600: 4 73% 41%;
+    --danger-050: 4 89% 97%;
+    --warning-600: 25 89% 37%;
+    --warning-050: 43 100% 96%;
+    --success-600: 155 96% 24%;
+    --success-050: 149 80% 96%;
+    --info-600: 213 89% 42%;
+    --info-050: 210 100% 97%;
+
+    /* Risk level specific */
+    --risk-critical-text: 4 73% 41%;
+    --risk-critical-bg: 4 89% 97%;
+    --risk-critical-border: 5 87% 82%;
+    --risk-high-text: 18 88% 41%;
+    --risk-high-bg: 22 100% 96%;
+    --risk-high-border: 27 91% 73%;
+    --risk-medium-text: 25 89% 37%;
+    --risk-medium-bg: 43 100% 96%;
+    --risk-medium-border: 39 82% 78%;
+    --risk-low-text: 155 96% 24%;
+    --risk-low-bg: 149 80% 96%;
+    --risk-low-border: 151 55% 72%;
+
+    /* Map to shadcn tokens */
+    --background: var(--neutral-050);
+    --foreground: var(--neutral-900);
+    --card: var(--surface);
+    --card-foreground: var(--neutral-900);
+    --popover: var(--surface);
+    --popover-foreground: var(--neutral-900);
+    --primary: var(--primary-700);
+    --primary-foreground: 0 0% 100%;
+    --secondary: var(--neutral-100);
+    --secondary-foreground: var(--neutral-900);
+    --muted: var(--neutral-100);
+    --muted-foreground: var(--neutral-500);
+    --accent: var(--primary-050);
+    --accent-foreground: var(--primary-900);
+    --destructive: var(--danger-600);
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--neutral-200);
+    --input: var(--neutral-300);
+    --ring: var(--primary-600);
+    --radius: 0.75rem;
+
+    --sidebar-background: var(--surface);
+    --sidebar-foreground: var(--neutral-700);
+    --sidebar-primary: var(--primary-700);
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: var(--primary-050);
+    --sidebar-accent-foreground: var(--primary-900);
+    --sidebar-border: var(--neutral-200);
+    --sidebar-ring: var(--primary-600);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08);
+
+    /* Radius tokens */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Pretendard Variable", "Noto Sans KR", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  /* Typography scale */
+  .text-display-lg { font-size: 32px; line-height: 40px; font-weight: 700; }
+  .text-heading-1 { font-size: 28px; line-height: 36px; font-weight: 700; }
+  .text-heading-2 { font-size: 22px; line-height: 30px; font-weight: 700; }
+  .text-heading-3 { font-size: 18px; line-height: 26px; font-weight: 600; }
+  .text-body-lg { font-size: 16px; line-height: 24px; font-weight: 500; }
+  .text-body-md { font-size: 14px; line-height: 22px; font-weight: 400; }
+  .text-body-sm { font-size: 13px; line-height: 20px; font-weight: 500; }
+  .text-label-md { font-size: 13px; line-height: 18px; font-weight: 600; }
+  .text-caption { font-size: 12px; line-height: 18px; font-weight: 500; }
+  .text-metric-lg { font-size: 24px; line-height: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .font-mono-num {
+    font-family: "JetBrains Mono", "D2Coding", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -1,0 +1,86 @@
+﻿
+[1m[46m RUN [49m[22m [36mv4.1.3 [39m[90mC:/Users/dbcdk/Desktop/RISK GUARD[39m
+
+npx : [90mstderr[2m | src/test/predictionSe
+rvice.test.ts[2m > [22m[2mpredictionServic
+e helpers[2m > [22m[2mfalls back to pass w
+hen ambiguous case judge fails
+위치 줄:1 문자:1
++ npx vitest run src/test/predictionService.t
+est.ts src/test/accidentPr ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified:  
+   ([90mstderr[2m...ase judge fails:Strin  
+  g) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandE 
+   rror
+ 
+[22m[39m[predictionService] Hybrid quality 
+gate judge failed. Fallback to pass for ambig
+uous case. Error: judge failed
+    at C:/Users/dbcdk/Desktop/RISK GUARD/src/
+test/predictionService.test.ts:319:45
+    at [90mfile:///C:/Users/dbcdk/Desktop/RI
+SK%20GUARD/[39mnode_modules/[4m.pnpm[24m/@
+vitest+runner@4.1.3/node_modules/[4m@vitest/
+runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///C:/Users/dbcdk/Desktop/RI
+SK%20GUARD/[39mnode_modules/[4m.pnpm[24m/@
+vitest+runner@4.1.3/node_modules/[4m@vitest/
+runner[24m/dist/chunk-artifact.js:1903:26
+    at [90mfile:///C:/Users/dbcdk/Desktop/RI
+SK%20GUARD/[39mnode_modules/[4m.pnpm[24m/@
+vitest+runner@4.1.3/node_modules/[4m@vitest/
+runner[24m/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///C:/Users/d
+bcdk/Desktop/RISK%20GUARD/[39mnode_modules/
+[4m.pnpm[24m/@vitest+runner@4.1.3/node_modul
+es/[4m@vitest/runner[24m/dist/chunk-artifac
+t.js:2323:10[90m)[39m
+    at [90mfile:///C:/Users/dbcdk/Desktop/RI
+SK%20GUARD/[39mnode_modules/[4m.pnpm[24m/@
+vitest+runner@4.1.3/node_modules/[4m@vitest/
+runner[24m/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///C:/Users/
+dbcdk/Desktop/RISK%20GUARD/[39mnode_modules/
+[4m.pnpm[24m/@vitest+runner@4.1.3/node_modu
+les/[4m@vitest/runner[24m/dist/chunk-artifa
+ct.js:2272:10[90m)[39m
+    at [90mfile:///C:/Users/dbcdk/Desktop/RI
+SK%20GUARD/[39mnode_modules/[4m.pnpm[24m/@
+vitest+runner@4.1.3/node_modules/[4m@vitest/
+runner[24m/dist/chunk-artifact.js:2955:64
+
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22muses gemini-3.1-flash-image-preview as default first candidate[32m 5[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mkeeps configured model first and de-duplicates candidates[32m 2[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mextracts inline image payload from generateContent response[32m 2[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mreturns null when generateContent response has no image part[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mparses three scenarios from strict JSON response[32m 3[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mparses fenced JSON response and guarantees scenario count[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mfills missing fields with fallback and always returns three items[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mbuilds scenario image prompt with context anchors and secondary accident label[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22minjects recognized context constraints for manual crane identity[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22madds explicit debris and kickback directives when cutting hazard cues are present[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mmarks heuristic as pass when hazard source, worker exposure path, and accident direction cues all exist[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mmarks heuristic as soft_fail when critical cues are largely missing[32m 0[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22muses hybrid quality gate for ambiguous heuristic and accepts judge pass result[32m 2[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mreturns soft_fail when hybrid judge evaluates ambiguous case as fail[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mfalls back to pass when ambiguous case judge fails[32m 11[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22muses equipment/site context fallback when model response is not parseable[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mkeeps manual-crane fallback identity when response parsing fails[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22muses text-only part when reference image is absent[32m 1[2mms[22m[39m
+ [32m??[39m src/test/predictionService.test.ts[2m > [22mpredictionService helpers[2m > [22mincludes inlineData part when reference image is provided[32m 0[2mms[22m[39m
+ [32m??[39m src/test/accidentPrediction.test.tsx[2m > [22mAccidentPrediction page[2m > [22mrenders three scenario cards with required fields after analysis[33m 528[2mms[22m[39m
+ [32m??[39m src/test/accidentPrediction.test.tsx[2m > [22mAccidentPrediction page[2m > [22mloads selected scenario visualization when card is clicked[32m 171[2mms[22m[39m
+ [32m??[39m src/test/accidentPrediction.test.tsx[2m > [22mAccidentPrediction page[2m > [22mrenders selected image even when quality status is soft_fail[32m 202[2mms[22m[39m
+ [32m??[39m src/test/accidentPrediction.test.tsx[2m > [22mAccidentPrediction page[2m > [22mpartitions bundle scenarios by quality pass/soft_fail/missing[32m 2[2mms[22m[39m
+ [32m??[39m src/test/accidentPrediction.test.tsx[2m > [22mAccidentPrediction page[2m > [22mcomputes separated narrative boxes without overlap for poster text[32m 1[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m24 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 17:20:58
+[2m   Duration [22m 6.86s[2m (transform 556ms, setup 759ms, import 1.68s, tests 945ms, environment 7.17s)[22m
+

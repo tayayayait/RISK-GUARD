@@ -1,0 +1,83 @@
+[functions.gemini-analyze]
+enabled = true
+verify_jwt = false
+import_map = "./functions/gemini-analyze/deno.json"
+entrypoint = "./functions/gemini-analyze/index.ts"
+
+[functions.form-autofill-analyze]
+enabled = true
+verify_jwt = false
+import_map = "./functions/form-autofill-analyze/deno.json"
+entrypoint = "./functions/form-autofill-analyze/index.ts"
+
+[functions.kosha-disaster-cases]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-disaster-cases/deno.json"
+entrypoint = "./functions/kosha-disaster-cases/index.ts"
+
+[functions.kosha-fatality-cases]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-fatality-cases/deno.json"
+entrypoint = "./functions/kosha-fatality-cases/index.ts"
+
+[functions.kosha-law-guides]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-law-guides/deno.json"
+entrypoint = "./functions/kosha-law-guides/index.ts"
+
+[functions.kosha-law-guides-form]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-law-guides-form/deno.json"
+entrypoint = "./functions/kosha-law-guides-form/index.ts"
+
+[functions.kosha-law-guides-assessment]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-law-guides-assessment/deno.json"
+entrypoint = "./functions/kosha-law-guides-assessment/index.ts"
+
+[functions.kosha-law-evidence]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-law-evidence/deno.json"
+entrypoint = "./functions/kosha-law-evidence/index.ts"
+
+[functions.analysis-action-plan]
+enabled = true
+verify_jwt = false
+import_map = "./functions/analysis-action-plan/deno.json"
+entrypoint = "./functions/analysis-action-plan/index.ts"
+
+[functions.kosha-materials]
+enabled = true
+verify_jwt = false
+import_map = "./functions/kosha-materials/deno.json"
+entrypoint = "./functions/kosha-materials/index.ts"
+
+[functions.form-history]
+enabled = true
+verify_jwt = false
+import_map = "./functions/form-history/deno.json"
+entrypoint = "./functions/form-history/index.ts"
+
+[functions.company-profile]
+enabled = true
+verify_jwt = false
+import_map = "./functions/company-profile/deno.json"
+entrypoint = "./functions/company-profile/index.ts"
+
+[functions.risk-legal-basis-fit]
+enabled = true
+verify_jwt = false
+import_map = "./functions/risk-legal-basis-fit/deno.json"
+entrypoint = "./functions/risk-legal-basis-fit/index.ts"
+
+[functions.risk-validation-audit]
+enabled = true
+verify_jwt = false
+import_map = "./functions/risk-validation-audit/deno.json"
+entrypoint = "./functions/risk-validation-audit/index.ts"
