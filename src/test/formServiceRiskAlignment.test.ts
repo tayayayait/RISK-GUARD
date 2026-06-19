@@ -96,6 +96,34 @@ function buildVehicleCollisionAssessment() {
   return assessment;
 }
 
+function buildCollapseAssessment() {
+  const assessment = createMockAssessment();
+  assessment.taskName = "동바리 상태 점검";
+  assessment.taskDescription =
+    "콘크리트 타설 전 동바리 지지 상태와 하중 집중 구간을 점검하는 작업이다.";
+  assessment.analysis.scenario = assessment.taskDescription;
+  assessment.profile.industry = "건설업";
+  assessment.profile.workLocation = "구조물 내부";
+  assessment.profile.equipment = ["동바리", "지지대"];
+  assessment.profile.hazards = [
+    {
+      id: "h-collapse-1",
+      name: "동바리 지지력 부족으로 구조물 붕괴 위험 증가",
+      type: "붕괴",
+      weight: 32,
+      confidence: "high",
+      reason: "동바리 지지 상태가 불량한 구간에 하중이 집중되면 구조물 붕괴 사고가 발생할 수 있음",
+    },
+  ];
+  assessment.analysis.immediateActions = [
+    { id: "a-c-1", action: "동바리 지지 상태를 점검한다.", priority: 1 },
+  ];
+  assessment.analysis.improvements = [
+    { id: "i-c-1", action: "하중 집중 구간의 동바리를 보강한다.", category: "시설" },
+  ];
+  return assessment;
+}
+
 function buildElectricalLawContext(): RiskLawContext {
   return {
     workTokens: ["분전반", "배선", "점검", "차단기", "교체"],
@@ -136,7 +164,6 @@ describe("FormService risk row alignment", () => {
       lawItems: [],
       lawActionItems: [],
     });
-
     expect(rows.length).toBeGreaterThanOrEqual(2);
     expect(rows.length).toBeLessThanOrEqual(3);
 
@@ -269,6 +296,9 @@ describe("FormService risk row alignment", () => {
     });
 
     expect(rows).toHaveLength(3);
+    const controlIntents = rows.map((row) => row.controlIntent);
+    expect(controlIntents.every(Boolean)).toBe(true);
+    expect(new Set(controlIntents).size).toBe(rows.length);
     expect(new Set(rows.map((row) => row.currentMeasure)).size).toBe(rows.length);
     expect(new Set(rows.map((row) => row.reductionMeasure)).size).toBe(rows.length);
 
@@ -289,5 +319,16 @@ describe("FormService risk row alignment", () => {
       expect(expectedAnchors.some((token) => row.currentMeasure.includes(token))).toBe(true);
       expect(expectedAnchors.some((token) => row.reductionMeasure.includes(token))).toBe(true);
     }
+  });
+
+  it("does not force three rows when only one or two distinct control intents are supported", () => {
+    const rows = FormService.mapAssessmentToRiskForm(buildCollapseAssessment(), {
+      lawItems: [],
+      lawActionItems: [],
+    });
+
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.length).toBeLessThanOrEqual(2);
+    expect(new Set(rows.map((row) => row.controlIntent)).size).toBe(rows.length);
   });
 });

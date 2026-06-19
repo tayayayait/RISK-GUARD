@@ -119,8 +119,10 @@ Date: 2026-04-13
   - `accident-report`: `작업/사고 제목 (선택)`, `현재 작업 상황 / 사고 발생 내용 (필수)`
 - Frontend timeout policy: `form-autofill-analyze` 호출은 `timeoutMs=60000`으로 실행(기본 30000ms 대비 상향)
 - Form Center(`FormEditor`) 2단계 정책(`risk-assessment`):
-  - 초기 `AI 분석 및 서식 자동작성` 단계에서는 `법적기준(legalBasis)`을 채우지 않는다.
-  - `AI로 적합한 법령 찾기` 버튼 실행 시에만 `kosha-law-guides-form` + `risk-legal-basis-fit` 경로로 행별 법적기준을 채운다.
+  - 초기 `AI 분석 및 서식 자동작성`에서 위험성평가 행을 생성한 직후 행별 `원인/유해위험요인`을 Gemini로 의미 분석한다.
+  - 의미 분석 결과를 `kosha-law-guides-form`에 전달해 공공데이터 스마트검색 API + 내부 DB/Storage 원문 후보를 검색·검증한다.
+  - 검색 후보를 `risk-legal-basis-fit`의 Gemini 최종 선택 단계에 전달하고, 검증된 행만 `법적기준(legalBasis)`에 자동 입력한다.
+  - `AI로 적합한 법령 찾기` 버튼은 동일 파이프라인을 수동 재실행하는 용도로 유지한다.
 
 ## 1-2) `form-history` (new)
 
@@ -211,17 +213,38 @@ Date: 2026-04-13
 ## 1-5) `risk-legal-basis-fit` (new)
 
 - Path: `/risk-legal-basis-fit` (Supabase Function: `risk-legal-basis-fit`)
-- Purpose: 위험성평가표 행별 `법적기준` 1차 선택 결과를 AI로 2차 적합성 검토
-- Request:
+- Purpose: 위험성평가표 행별 위험 맥락 분석 및 법적기준 후보 최종 선택
+- Context analysis request (`mode=analyze_context`):
   - `taskName: string`
   - `contextText?: string`
-  - `rows: Array<{ rowIndex, workProcess, category, cause, hazardFactor, selectedLegalBasis, candidateLegalBases[] }>`
-- Response:
-  - `{ results: Array<{ rowIndex, recommendedLegalBasis, status("verified"|"review_required"|"unknown"), score(0~100), reason }> }`
+  - `rows: Array<{ rowIndex, workProcess, category, cause, hazardFactor, controlIntent? }>`
+- Context analysis response:
+  - `{ analyses: Array<{ rowIndex, hazardType, accidentMechanism, unsafeCondition, controlIntent, equipment[], searchTerms[] }> }`
+  - `controlIntent`: `access_control | supervision | traffic_operation | operating_procedure | equipment_guard | energy_isolation | inspection_maintenance | ventilation_detection | ppe | structural_support | emergency_response | general_control`
+  - 각 `controlIntent`는 한국어 법령 검색어 사전으로 확장된다. 예: `access_control -> 출입 통제/동선 분리`, `supervision -> 유도자 배치/신호수 배치`, `traffic_operation -> 제한속도/후진 경보`.
+  - Gemini 문맥 분석 제한시간은 18초이며, 실패/타임아웃/빈 응답 시 서버가 입력 행에서 동일한 `controlIntent` 분류 규칙과 한국어 검색어 사전을 적용한 로컬 문맥 분석 결과로 대체한다.
+  - 입력 행에 지게차·차량·이동장비와 충돌·후진·운반 신호가 함께 있으면 AI가 다른 위험유형을 반환해도 `차량/이동장비 충돌`을 우선 유지한다.
+- Candidate review request (`mode=review_candidates`):
+  - `taskName: string`
+  - `contextText?: string`
+  - `rows: Array<{ rowIndex, workProcess, category, cause, hazardFactor, selectedLegalBasis, candidateLegalBases[], candidateOptions[] }>`
+  - `candidateOptions`: `{ legalBasis, articleNumber, articleTitle, clausePreview, originalText, rankingScore, sourceType("storage"|"db"|"api"|"action"|"fallback") }`
+- Candidate review response:
+  - `{ results: Array<{ rowIndex, recommendedLegalBasis, status("verified"|"review_required"|"unknown"), score(0~100), reason, evidenceExcerpt?, applicabilityReason?, reviewSource, fallbackReason? }> }`
+  - `reviewSource`: `gemini | deterministic_fallback`
+  - `fallbackReason`: `missing_secret | upstream_error | timeout | request_error | invalid_response`
 - Selection rule:
   - `recommendedLegalBasis`는 반드시 `candidateLegalBases` 내부 값만 허용
-  - Gemini 실패/타임아웃 시 규칙형 fallback 점수로 자동 대체
+  - `status=verified`는 `evidenceExcerpt`가 해당 후보의 `originalText`에 실제 포함될 때만 허용한다. 불일치하거나 원문이 없으면 `review_required`로 낮춘다.
+  - Gemini 최종 검증 제한시간은 20초이며, 실패/타임아웃 시 provenance 기반 deterministic fallback으로 대체
+  - deterministic fallback의 자동 확정은 `selectedLegalBasis 일치 + 검증 출처(storage/db/api/action) + 행 랭킹 94점 이상 + 위험유형 직접 매핑`을 모두 충족한 후보만 허용
+  - `sourceType=fallback` 또는 위 조건 미달 후보는 `review_required`로 반환
   - 프론트는 행 내용이 변경되지 않은 경우에만 2차 추천 결과를 반영
+  - 서로 다른 `controlIntent` 행은 후보가 존재하는 한 서로 다른 조문을 선택한다.
+  - AI가 동일 조문을 반복 추천하면 전체 행×후보 점수 행렬에서 `배정 행 수 → AI 추천 유지 → 후보 점수 합계` 순으로 최대화해 고유 조문을 재배정한다.
+  - 프론트 완료 메시지는 `매칭 건수`, `검증 대체 건수`, `수동 검토 건수`를 분리해 표시
+  - 위험성평가 표 상단에는 법적기준 매칭 기준(`사고유형·장비·원인·유해위험요인·통제목적`)과 조문 중복 억제 정책을 상시 표시한다.
+  - 각 `법적기준` 셀은 행별 `controlIntent` 라벨과 `원문 확인/검토 후보/확인 불가` 상태를 표시한다. 검증된 후보는 접을 수 있는 `원문 근거`와 적용 판단을 함께 노출한다.
 
 ## 2) `kosha-disaster-cases`
 
@@ -249,7 +272,7 @@ Date: 2026-04-13
 - Implementation: `buildLawGuidesPayload` shared-core wrapper (response narrowed to evidence fields)
 - Internal execution mode: `buildLawGuidesPayload(..., { responseMode: "evidence_only" })`
   - evidence-only 경로에서는 action seed 생성, narrative 생성, law-fit 검증 단계를 수행하지 않는다.
-- `api_only + evidence_only` 경로에서는 워커 사용량 보호를 위해 searchValues를 최대 `10`개로 제한하고 semantic rerank를 비활성화한다.
+- `api_only + evidence_only` 경로에서는 워커 사용량 보호를 위해 searchValues를 최대 `6`개로 제한하고 semantic rerank를 비활성화한다.
 - 위 경로에서 1차 API 검색 결과가 0건이면 hazard/generic seed(최대 3개)로 추가 검색을 수행한다.
 - 위 경로에서 API 후보는 존재하지만 랭킹 결과가 0건이면 `threshold=0 + hazardTypeFilter=none` 저강도 랭킹을 1회 적용한다.
 - Law source policy (assessment 4단계): `api_only`
@@ -268,10 +291,10 @@ Date: 2026-04-13
 - Stage keys: `immediate | same_day | pre_resume | improvement`
 - Implementation: `buildLawGuidesPayload` shared-core wrapper (response narrowed to action plan fields)
 - Filtering rule: `articleNumbers` 없는 action item은 제거하여 조문 없는 카드 노출을 방지
-- Frontend timeout policy: `analysis-action-plan`, `kosha-law-evidence`, `kosha-law-guides*` 호출은 `timeoutMs=120000`으로 실행
+- Frontend timeout policy: `kosha-disaster-cases`, `kosha-fatality-cases`, `analysis-action-plan`, `kosha-law-evidence`, `kosha-law-guides*` 호출은 `timeoutMs=120000`으로 실행
 - Shared smartSearch timeout policy (server internal):
   - per-request timeout: `API_FETCH_TIMEOUT_MS=8000`
-  - total search budget: `API_FETCH_BUDGET_MS=70000`
+  - total search budget: `API_FETCH_BUDGET_MS=45000`
   - retry: timeout/abort/429/5xx 계열은 카테고리 요청당 1회 재시도
   - timeout/abort는 `trackErrors`로 보존하고, 다른 트랙/데이터가 있으면 클라이언트는 `partial`로 처리한다.
 
@@ -297,7 +320,8 @@ Date: 2026-04-13
 - API 검색어는 `상위 hazard name(최대 3) + 상위 hazard type(최대 3) + taskName + workLocation + equipment(최대 3) + taskDescription/analysisScenario 토큰` 조합으로 확장 생성
 - 검색어는 문장형 seed 외에 공백 분해 토큰 fallback(불용어 제외)을 포함해 매칭 누락을 줄임
 - API 검색어는 첫 결과에서 중단하지 않고 모든 후보 검색어를 순회
-- smartSearch 요청 row 수: 법령 카테고리(1~4)는 `numOfRows=60`, Guide/미디어는 `numOfRows=20`
+- smartSearch 요청 row 수: 법령 카테고리(1~4)는 `numOfRows=30`, Guide/미디어는 `numOfRows=10`
+- 적응형 임계치 랭킹은 최저 임계치에서 점수를 1회 계산하고 임계치별 필터만 적용해 동일 후보군의 반복 점수 계산을 방지
 - 법령 트랙: Storage 결과를 1순위로 사용하고, 엄격 4축 게이트(`작업유형/사고유형/위험요인/설비특성`) 후보를 우선 랭킹
 - 법령 트랙 strict 결과가 최소 목표 건수(6건)에 못 미치면 전체 법령 후보로 확장해 동일 임계치(`60→55→50→45→40→35`) 재랭킹
 - 법령 트랙 랭킹 fallback:
@@ -556,14 +580,16 @@ Date: 2026-04-13
   - 사고유형은 단일 키워드 선확정이 아니라 문맥 축(`장비/상황/대상/행위/위험요인`) 점수 합산으로 판정한다.
   - 충돌 가능 유형(예: 차량 협착 vs 회전부 끼임)은 문맥 신호 강도(장비/행위/공간관계)로 우선순위를 결정한다.
   - 유사 신호는 중복 제거(유사도 기반) 후 정보량/명확도 점수로 정렬해 상위 행만 선택한다.
-  - 중복 억제는 유사도 외에 `사고유형+행위+장비+실패상태` 메커니즘 시그니처 단위로도 적용한다.
-  - 결과 행 수는 `3행 우선`으로 생성하며, 고유 메커니즘이 부족한 경우에만 `2행`으로 축소한다.
-  - 3행 우선 유지가 필요할 때는 작업 맥락 밖 위험유형 확장을 금지하고, 동일 위험유형 내 실패메커니즘 변형으로 행을 보강한다.
+  - 중복 억제는 유사도 외에 `사고유형+행위+장비+실패상태+통제목적` 메커니즘 시그니처와 `사고유형+controlIntent` 시그니처 단위로 적용한다.
+  - 결과 행 수는 `3행 우선`으로 생성하되, 고유 통제 목적이 부족하면 `1~2행`으로 축소한다.
+  - 행 수를 채우기 위한 작업 맥락 밖 위험유형 확장과 동일 통제 목적의 강제 행 생성을 금지한다.
   - `원인(cause)`, `유해위험요인(hazardFactor)`은 길이 제한 내에서 문장 경계 기준으로 잘라 생성하며, 조사/연결어로 끝나는 미완성 문장(예: `...가`, `...및`)은 허용하지 않는다.
   - `법적기준(legalBasis)`: `산업안전보건기준에 관한 규칙 제XX조(조문명)` 형식으로만 표기한다.
-- `관련근거(법적기준)` 매칭은 초기 생성 단계가 아니라 `AI로 적합한 법령 찾기` 버튼 실행 시점에 수행한다.
-- 버튼 실행 시 서식 전용 strict 백엔드(`kosha-law-guides-form`) 결과 중 **Storage source + 안전보건규칙 원문** 후보를 1순위로 사용해 매핑한다.
-- `kosha-law-guides-form`은 `lawSourcePolicy=storage_db_only`로 실행되어 외부 smartSearch API를 사용하지 않는다.
+- `관련근거(법적기준)` 매칭은 초기 생성 직후 자동 실행하며, 수동 버튼으로 동일 절차를 재실행할 수 있다.
+- 결과 표는 법적기준 매칭 기준을 사용자가 확인할 수 있도록 `사고유형·장비·원인·유해위험요인·통제목적` 기준 안내와 행별 통제목적 라벨을 표시한다.
+- 검색 전에 Gemini가 각 행의 `원인+유해위험요인`을 `위험유형/사고메커니즘/불안전상태/통제목적/장비/검색구문`으로 구조화한다.
+- 서식 전용 백엔드(`kosha-law-guides-form`)는 `lawSourcePolicy=storage_db_only`로 실행해 내부 DB/Storage 법령 후보만 사용한다.
+- DB/Storage 후보는 조문번호와 조문명을 확인할 수 있고 안전보건규칙 원문 정보가 있는 경우만 행 매칭 후보로 허용한다.
 - 행 단위 사고유형은 `원인(cause)+유해위험요인(hazardFactor)`를 우선으로 정규화하고, `분류(category)`는 보조 신호로만 사용한다.
 - 행 단위 매핑은 `원인+유해위험요인+작업상황` 축 기반 strict 매칭으로 후보를 랭킹한다.
   - `RiskLawContext.taskHazardTypes + taskContextTokens`를 랭킹 입력으로 사용하며, 행 위험유형과 작업 허용 위험유형을 동시에 충족하는 후보만 통과시킨다.
@@ -577,25 +603,27 @@ Date: 2026-04-13
 - 행별 배정 순서:
   1. Storage/action/fallback 후보를 모두 수집
   2. 행 축(strict) + 토큰밀도 + 충돌/일반문구 패널티를 반영해 단일 점수로 재정렬
-  3. 사고 단위 전역 배정에서 조문번호 중복을 금지하고(동일 조문 1회), 미사용 조문 우선 배정
+  3. 사고 단위 전역 배정에서 조문번호 중복을 금지하고, 최대 가중치 이분 매칭으로 고유 조문 조합을 선택
     - 조문번호 메타데이터(`articleNumber`)가 비어 있으면 `legalBasis` 문자열에서 조문번호를 재추출해 동일 조문 중복을 차단한다.
-  4. 유일 후보가 부족하거나 임계치 미달이면 해당 행은 공란 유지
-- `AI로 적합한 법령 찾기` 버튼 실행 시 행별 1차 선택 + AI 2차 적합성 검토(`risk-legal-basis-fit`)를 순차 실행해 최종 조문을 보정한다.
+  - 점수 우선순위는 `배정 가능한 행 수`, `AI 추천 유지`, `행별 controlIntent 적합 점수` 순이다.
+  - 차량/이동장비 기준 조문맵은 저장 원문과 대조한 `제39조·제40조·제171조·제172조·제179조·제184조·제197조·제199조·제200조`를 사용하며, 조문명이 불일치했던 제196조·제198조 항목은 제거했다.
+  4. 고유 후보가 부족하고 DB/Storage 후보가 `review_required`이면 최상위 후보를 표시하되 수동 검토 상태를 유지
+- 자동작성 또는 수동 재검색 시 `Gemini 행 맥락 분석 → 하이브리드 후보 검색 → 행별 1차 랭킹 → Gemini 최종 선택`을 순차 실행한다.
 - 위험유형 보강 규칙: `비계`, `발판`, `고정불량` 계열 표현은 `추락`으로 정규화한다.
 - 행 집합 배정은 후보가 적은 행부터 처리하며, 동일 조문은 기본적으로 중복 배정하지 않는다.
-- 동일 사고 내에서 동일 조문 재사용은 허용하지 않는다(메커니즘 동일 여부와 무관).
-- 프론트(`FormEditor`)의 중복 정리도 동일 정책을 따른다: 조문 중복 시 재매핑을 1차 시도하고, 실패하면 공란 처리한다.
-- 재매핑 후보가 없으면 저장값은 `legalBasis=\"\"`로 유지하며, UI 셀에는 `검토 필요`를 표시한다(표시값은 저장/내보내기 payload에 포함하지 않음).
+- 동일 사고 내 동일 조문은 우선 재사용하지 않는다. 다만 고유 후보가 부족한 `review_required` 행은 검증된 DB/Storage 최상위 후보를 제한적으로 재사용한다.
+- 프론트(`FormEditor`)는 조문 중복 시 재매핑을 먼저 시도하고, 실패한 `review_required` 행에는 DB/Storage 최상위 후보와 `검토 필요` 상태를 함께 유지한다.
+- `unknown`이거나 유효한 DB/Storage 후보가 없으면 저장값은 `legalBasis=\"\"`로 유지한다.
 - `관련근거` 표시 형식은 정규식 `^산업안전보건기준에 관한 규칙 제\\d+조\\(.+\\)$`를 만족해야 하며, 미충족 시 공란 처리한다.
 - 조문번호 또는 조문명이 하나라도 미확정이면 `legalBasis=\"\"`로 반환한다(추정 출력 금지).
-- 저신뢰/모호 후보는 자동 확정하지 않고 `legalBasis=\"\"`로 유지한다(오매칭 금지).
+- 저신뢰/모호 DB/Storage 후보는 `review_required`로 표시하며 자동 확정값과 구분한다. `unknown` 후보는 공란으로 유지한다.
 - 위험유형(사고 메커니즘) 불일치 후보는 검색 점수가 높아도 자동 확정하지 않고 제외한다.
 - `threshold:0` 완화 폴백은 사용하지 않으며, 법령 evidence 후보가 모두 임계치 미달일 때만 `threshold:20` 저강도 폴백을 적용한다.
 - `현재상태 및 조치`, `감소대책`은 행별 1문장(최대 60자 내외)으로 생성한다.
 - 행 생성 마지막 단계에서 `row consistency gate`를 적용해 `원인/유해위험요인/현재상태 및 조치/감소대책/법적기준`의 사고 메커니즘 일치 여부를 검증한다.
   - 검증 실패는 문서 전체 중단이 아니라 행 단위 처리로 제한한다.
   - 1차 생성 후 실패 필드는 위험유형 템플릿 기반으로 1회 재작성하고 재검증한다.
-  - 재검증 실패 시 해당 필드는 자동작성 중단(빈값)으로 남기고 행 상태를 `review_required`로 확정한다.
+  - 재검증 실패 시 `현재상태 및 조치/감소대책`은 위험유형 템플릿으로 재작성된 값을 유지하고 행 상태를 `review_required`로 확정한다. 원인·유해위험요인·법적기준의 미해결 값은 기존 공란 정책을 유지한다.
   - 다른 행/필드는 계속 생성하며 다운로드는 차단하지 않는다.
   - `현재상태 및 조치/감소대책`이 행 위험유형 신호와 불일치하거나 행 앵커 토큰(장비/행위/실패상태)과 연결되지 않으면 해당 위험유형+행 앵커 기준 문장으로 자동 재작성한다.
   - 대책 문장에 기대 위험유형 외 강한 상충 신호가 우세하면(예: 감전 행에 `안전대/추락` 중심 문구), 기대 유형 신호가 일부 포함돼도 재작성한다.
@@ -632,8 +660,9 @@ Date: 2026-04-13
 
 - `kosha-law-guides-form`
   - 목적: 서식센터 전용 법령 근거 생성
-  - 정책: strict mode (`mode=form`) + `lawSourcePolicy=storage_db_only`
-  - 법령 소스: Storage + DB only (API track disabled)
+  - 정책: strict mode (`mode=form`) + `lawSourcePolicy=default`
+  - 법령 소스: 공공데이터 스마트검색 API + Storage + DB
+  - 검색 입력: Gemini 행별 의미 분석 결과(`semanticIntents`)를 우선 검색 시드 및 위험 프로필로 사용
   - 저신뢰 결과는 빈 근거 허용
 - `kosha-law-guides-assessment`
   - 목적: 위험성 평가 흐름 전용 근거 탐색

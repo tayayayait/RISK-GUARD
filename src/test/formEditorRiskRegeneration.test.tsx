@@ -9,6 +9,7 @@ import { FormLawService } from "@/services/formLawService";
 import { FormService } from "@/services/formService";
 import { FormHistoryService } from "@/services/formHistoryService";
 import { RiskValidationAuditService } from "@/services/riskValidationAuditService";
+import { RiskLegalBasisFitService } from "@/services/riskLegalBasisFitService";
 import { toast } from "@/hooks/use-toast";
 import * as documentBuilder from "@/lib/documentBuilder";
 
@@ -29,6 +30,22 @@ vi.mock("@/services/formLawService", () => ({
   },
 }));
 
+vi.mock("@/services/riskLegalBasisFitService", () => ({
+  RiskLegalBasisFitService: {
+    analyzeRows: vi.fn(async (input: { rows: RiskAssessmentRow[] }) => input.rows.map((row, rowIndex) => ({
+      rowIndex,
+      hazardType: row.hazardFactor.includes("감전") ? "감전" : "추락",
+      accidentMechanism: `${row.cause} ${row.hazardFactor}`.trim(),
+      unsafeCondition: row.cause,
+      equipment: row.hazardFactor.includes("감전") ? ["충전부"] : ["비계", "작업발판"],
+      searchTerms: row.hazardFactor.includes("감전")
+        ? ["충전부 방호", "감전 방지"]
+        : ["비계 작업발판", "추락 방지"],
+    }))),
+    reviewRows: vi.fn(async () => []),
+  },
+}));
+
 vi.mock("@/services/riskValidationAuditService", () => ({
   RiskValidationAuditService: {
     writeEvents: vi.fn(async () => ({ inserted: 0 })),
@@ -41,6 +58,12 @@ vi.mock("@/components/layout/DashboardShell", () => ({
 
 let latestRiskRows: RiskAssessmentRow[] = [];
 let latestLegalBasisReviewRequiredByRow: boolean[] = [];
+let latestLegalBasisReviewDetailsByRow: Array<{
+  status: string;
+  evidenceExcerpt?: string;
+  applicabilityReason?: string;
+  reason?: string;
+} | undefined> = [];
 vi.mock("@/components/forms/RiskAssessmentTable", () => ({
   RiskAssessmentTable: ({
     data,
@@ -53,6 +76,7 @@ vi.mock("@/components/forms/RiskAssessmentTable", () => ({
     isMatchingLegalBasis,
     disableMatchLegalBasis,
     legalBasisReviewRequiredByRow,
+    legalBasisReviewDetailsByRow,
   }: {
     data: RiskAssessmentRow[];
     onChange: (index: number, field: keyof RiskAssessmentRow, value: string | number) => void;
@@ -64,9 +88,16 @@ vi.mock("@/components/forms/RiskAssessmentTable", () => ({
     isMatchingLegalBasis?: boolean;
     disableMatchLegalBasis?: boolean;
     legalBasisReviewRequiredByRow?: boolean[];
+    legalBasisReviewDetailsByRow?: Array<{
+      status: string;
+      evidenceExcerpt?: string;
+      applicabilityReason?: string;
+      reason?: string;
+    } | undefined>;
   }) => {
     latestRiskRows = data;
     latestLegalBasisReviewRequiredByRow = legalBasisReviewRequiredByRow ?? [];
+    latestLegalBasisReviewDetailsByRow = legalBasisReviewDetailsByRow ?? [];
     return (
       <div>
         <div data-testid="risk-table-row-count">{data.length}</div>
@@ -490,13 +521,36 @@ describe("FormEditor risk assessment regeneration flow", () => {
     expect(addSecondAttemptInput?.formTemplateHint).toContain("[retry-novelty]");
   });
 
-  it("keeps legalBasis empty on initial analyze and runs matching only on button click", async () => {
+  it("automatically analyzes row context and fills legalBasis during initial generation", async () => {
     const fixture = buildRiskAssessmentFixture(
       "비계 작업",
       "작업자가 고소작업 중 비계 고정 상태를 점검하는 과정에서 추락 위험이 증가한 상태이다.",
     );
 
     vi.mocked(analyzeTaskToAssessment).mockResolvedValueOnce(fixture);
+    vi.mocked(FormLawService.searchLaws).mockResolvedValueOnce({
+      items: [],
+      lawItems: [
+        {
+          id: "law-storage-42",
+          type: "law",
+          sourceBadge: "법령",
+          title: "제42조(추락의 방지)",
+          relevanceScore: 98,
+          summaryBullets: ["작업발판 추락 방지 조치"],
+          keywords: ["비계", "작업발판", "추락", "고정"],
+          sourceType: "storage",
+          legalBasis: "산업안전보건기준에 관한 규칙 제42조(추락의 방지)",
+          articleNumber: "제42조",
+          articleTitle: "추락의 방지",
+          clausePreview: "근로자가 추락할 위험이 있는 장소에는 방지 조치를 해야 한다.",
+        },
+      ],
+      guideItems: [],
+      mediaItems: [],
+      lawActionItems: [],
+      status: "success",
+    });
 
     render(
       <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
@@ -514,17 +568,139 @@ describe("FormEditor risk assessment regeneration flow", () => {
 
     await waitFor(() => {
       expect(vi.mocked(analyzeTaskToAssessment)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(RiskLegalBasisFitService.analyzeRows)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(FormLawService.searchLaws)).toHaveBeenCalledTimes(1);
       expect(latestRiskRows.length).toBeGreaterThan(0);
     });
-    expect(vi.mocked(FormLawService.searchLaws)).not.toHaveBeenCalled();
-    expect(latestRiskRows.every((row) => row.legalBasis === "")).toBe(true);
+    expect(latestRiskRows.some((row) => row.legalBasis.includes("제42조"))).toBe(true);
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "AI로 적합한 법령 찾기" }));
+  it("keeps the best DB or Storage legal candidate visible when AI review is required", async () => {
+    const fixture = buildRiskAssessmentFixture(
+      "비계 작업",
+      "작업자가 고소작업 중 비계 고정 상태를 점검하는 과정에서 추락 위험이 증가한 상태이다.",
+    );
+
+    vi.mocked(analyzeTaskToAssessment).mockResolvedValueOnce(fixture);
+    vi.mocked(FormLawService.searchLaws).mockResolvedValueOnce({
+      items: [],
+      lawItems: [
+        {
+          id: "law-db-42",
+          type: "law",
+          sourceBadge: "법령",
+          title: "제42조(추락의 방지)",
+          relevanceScore: 88,
+          summaryBullets: ["작업발판 추락 방지 조치"],
+          keywords: ["비계", "작업발판", "추락", "고정"],
+          sourceType: "db",
+          legalBasis: "산업안전보건기준에 관한 규칙 제42조(추락의 방지)",
+          articleNumber: "제42조",
+          articleTitle: "추락의 방지",
+          clausePreview: "근로자가 추락할 위험이 있는 장소에는 방지 조치를 해야 한다.",
+        },
+      ],
+      guideItems: [],
+      mediaItems: [],
+      lawActionItems: [],
+      status: "success",
+    });
+    vi.mocked(RiskLegalBasisFitService.reviewRows).mockResolvedValueOnce([
+      {
+        rowIndex: 0,
+        recommendedLegalBasis: "산업안전보건기준에 관한 규칙 제42조(추락의 방지)",
+        status: "review_required",
+        score: 45,
+        reason: "DB 원문 후보이나 자동 확정 기준에는 미달합니다.",
+        evidenceExcerpt: "근로자가 추락할 위험이 있는 장소에는 방지 조치를 해야 한다.",
+        applicabilityReason: "비계 작업발판 추락 위험과 관련되지만 적용 조건은 수동 확인이 필요합니다.",
+        reviewSource: "deterministic_fallback",
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
+        <Routes>
+          <Route path="/forms/:formType" element={<FormEditor />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fillRequiredInputs(
+      "비계 작업",
+      "작업자가 고소작업 중 비계 고정 상태를 점검하는 과정에서 추락 위험이 증가한 상태이다.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^AI 분석 및 서식 자동작성$/ }));
 
     await waitFor(() => {
-      expect(vi.mocked(FormLawService.searchLaws)).toHaveBeenCalledTimes(1);
+      expect(latestRiskRows[0]?.legalBasis).toContain("제42조");
+      expect(latestLegalBasisReviewRequiredByRow[0]).toBe(true);
+      expect(latestLegalBasisReviewDetailsByRow[0]).toEqual(expect.objectContaining({
+        status: "review_required",
+        evidenceExcerpt: expect.stringContaining("추락할 위험"),
+      }));
     });
-    expect(latestRiskRows.every((row) => typeof row.legalBasis === "string")).toBe(true);
+  });
+
+  it("reports when a verified deterministic fallback is used after AI review timeout", async () => {
+    const fixture = buildRiskAssessmentFixture(
+      "비계 작업",
+      "작업자가 고소작업 중 비계 고정 상태를 점검하는 과정에서 추락 위험이 증가한 상태이다.",
+    );
+    vi.mocked(analyzeTaskToAssessment).mockResolvedValueOnce(fixture);
+    vi.mocked(FormLawService.searchLaws).mockResolvedValueOnce({
+      items: [],
+      lawItems: [
+        {
+          id: "law-storage-42",
+          type: "law",
+          sourceBadge: "법령",
+          title: "제42조(추락의 방지)",
+          relevanceScore: 98,
+          summaryBullets: ["작업발판 추락 방지 조치"],
+          keywords: ["비계", "작업발판", "추락", "고정"],
+          sourceType: "storage",
+          legalBasis: "산업안전보건기준에 관한 규칙 제42조(추락의 방지)",
+          articleNumber: "제42조",
+          articleTitle: "추락의 방지",
+        },
+      ],
+      guideItems: [],
+      mediaItems: [],
+      lawActionItems: [],
+      status: "success",
+    });
+    vi.mocked(RiskLegalBasisFitService.reviewRows).mockResolvedValueOnce([
+      {
+        rowIndex: 0,
+        recommendedLegalBasis: "산업안전보건기준에 관한 규칙 제42조(추락의 방지)",
+        status: "verified",
+        score: 90,
+        reason: "검증된 원문 후보입니다.",
+        reviewSource: "deterministic_fallback",
+        fallbackReason: "timeout",
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
+        <Routes>
+          <Route path="/forms/:formType" element={<FormEditor />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fillRequiredInputs(
+      "비계 작업",
+      "작업자가 고소작업 중 비계 고정 상태를 점검하는 과정에서 추락 위험이 증가한 상태이다.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^AI 분석 및 서식 자동작성$/ }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        description: expect.stringContaining("검증 대체 1건"),
+      }));
+    });
   });
 
   it("does not auto rematch legal basis when row content is edited", async () => {
@@ -560,7 +736,7 @@ describe("FormEditor risk assessment regeneration flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "행1 원인 수정" }));
 
     await waitFor(() => {
-      expect(vi.mocked(FormLawService.searchLaws)).not.toHaveBeenCalled();
+      expect(vi.mocked(FormLawService.searchLaws)).toHaveBeenCalledTimes(1);
       expect(latestRiskRows[0]?.legalBasis).toBe("");
     });
   });
@@ -572,7 +748,7 @@ describe("FormEditor risk assessment regeneration flow", () => {
     );
 
     vi.mocked(analyzeTaskToAssessment).mockResolvedValueOnce(fixture);
-    vi.mocked(FormLawService.searchLaws).mockRejectedValueOnce(new Error("forced legal-match failure"));
+    vi.mocked(RiskLegalBasisFitService.analyzeRows).mockRejectedValueOnce(new Error("forced legal-match failure"));
 
     render(
       <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
@@ -592,15 +768,11 @@ describe("FormEditor risk assessment regeneration flow", () => {
       expect(vi.mocked(analyzeTaskToAssessment)).toHaveBeenCalledTimes(1);
       expect(latestRiskRows.length).toBeGreaterThan(0);
     });
-    expect(latestRiskRows.every((row) => row.legalBasis === "")).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "AI로 적합한 법령 찾기" }));
-
     await waitFor(() => {
-      expect(vi.mocked(FormLawService.searchLaws)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(FormLawService.searchLaws)).not.toHaveBeenCalled();
       expect(vi.mocked(toast)).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: "법적기준 매칭 실패",
+          title: "AI 서식 생성 완료",
         }),
       );
     });

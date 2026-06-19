@@ -1,7 +1,15 @@
-﻿import { memo, type ChangeEvent } from "react";
+import { memo, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { RISK_CATEGORY_OPTIONS, normalizeRiskCategoryValue } from "@/services/formService";
 import type { RiskAssessmentRow } from "@/types/formTemplate";
+import type { RiskControlIntent } from "@/types/riskControlIntent";
+
+export interface LegalBasisReviewDetail {
+  status: "verified" | "review_required" | "unknown";
+  evidenceExcerpt?: string;
+  applicabilityReason?: string;
+  reason?: string;
+}
 
 interface Props {
   data: RiskAssessmentRow[];
@@ -15,6 +23,7 @@ interface Props {
   isMatchingLegalBasis?: boolean;
   disableMatchLegalBasis?: boolean;
   legalBasisReviewRequiredByRow?: boolean[];
+  legalBasisReviewDetailsByRow?: Array<LegalBasisReviewDetail | undefined>;
   readOnly?: boolean;
 }
 
@@ -31,6 +40,23 @@ const BODY_EDITABLE_TEXT =
   "h-[112px] w-full resize-none border-0 bg-transparent p-0 text-[12px] leading-[1.55] text-neutral-900 outline-none focus-visible:ring-1 focus-visible:ring-primary-600 focus-visible:ring-inset disabled:cursor-default disabled:opacity-100";
 const INLINE_INPUT_BASE =
   "w-full border-0 bg-transparent p-0 text-[12px] text-neutral-900 outline-none focus-visible:ring-1 focus-visible:ring-primary-600 focus-visible:ring-inset disabled:cursor-default disabled:opacity-100";
+const LEGAL_BASIS_MATCH_POLICY =
+  "법적기준 매칭 기준: 사고유형·장비·원인·유해위험요인·통제목적을 함께 보고 후보 법령을 찾습니다. 같은 조문 반복은 가능한 경우 피합니다. 후보가 없거나 원문 검증이 부족하면 검토 필요로 표시합니다.";
+
+const RISK_CONTROL_INTENT_LABELS: Record<RiskControlIntent, string> = {
+  access_control: "접근통제",
+  supervision: "유도·감시",
+  traffic_operation: "차량운행",
+  operating_procedure: "작업절차",
+  equipment_guard: "설비방호",
+  energy_isolation: "에너지격리",
+  inspection_maintenance: "점검정비",
+  ventilation_detection: "환기·측정",
+  ppe: "보호구",
+  structural_support: "구조지지",
+  emergency_response: "비상대응",
+  general_control: "일반통제",
+};
 
 function clampRiskInput(value: number) {
   if (!Number.isFinite(value)) return 1;
@@ -48,6 +74,13 @@ function formatRiskLevel(frequency: number, severity: number) {
   return `${score}(${toRiskLabel(score)})`;
 }
 
+function getControlIntentLabel(intent?: RiskControlIntent) {
+  if (!intent) {
+    return "";
+  }
+  return RISK_CONTROL_INTENT_LABELS[intent] ?? "";
+}
+
 export const RiskAssessmentTable = memo(function RiskAssessmentTable({
   data,
   onChange,
@@ -56,6 +89,7 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
   isMatchingLegalBasis = false,
   disableMatchLegalBasis = false,
   legalBasisReviewRequiredByRow = [],
+  legalBasisReviewDetailsByRow = [],
   readOnly = false,
 }: Props) {
   if (!data || data.length === 0) {
@@ -93,6 +127,9 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
           </div>
         )}
       </div>
+      <p className="rounded-radius-md border border-primary-100 bg-primary-050 px-space-3 py-space-2 text-caption text-primary-800">
+        {LEGAL_BASIS_MATCH_POLICY}
+      </p>
 
       <div className={`w-full overflow-x-auto border-2 ${BORDER_COLOR} bg-white`}>
         <table className="min-w-[1860px] table-fixed border-collapse text-[12px] text-neutral-900">
@@ -182,6 +219,14 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
               const reviewFields = new Set(row.reviewRequiredFields ?? []);
               const reviewReasonText = (row.reviewReasonCodes ?? []).join(", ");
               const reviewCellClass = reviewRequired ? " bg-warning-050/50" : "";
+              const legalBasisText = row.legalBasis.trim();
+              const controlIntentLabel = getControlIntentLabel(row.controlIntent);
+              const legalBasisReviewDetail = legalBasisReviewDetailsByRow[index];
+              const showLegalBasisReviewReason = !legalBasisText && legalBasisReviewRequiredByRow[index];
+              const legalBasisTextareaClass =
+                controlIntentLabel || showLegalBasisReviewReason || legalBasisReviewDetail || legalBasisText
+                  ? `${BODY_EDITABLE_TEXT} h-[86px]`
+                  : BODY_EDITABLE_TEXT;
 
               return (
               <tr key={`${row.hazardFactor}-${index}`} className="h-[128px]">
@@ -238,14 +283,52 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
                   />
                 </td>
                 <td className={`${BODY_TEXT_CELL}${reviewFields.has("legalBasis") ? reviewCellClass : ""}`}>
+                  {(controlIntentLabel || showLegalBasisReviewReason || legalBasisReviewDetail || legalBasisText) && (
+                    <div className="mb-1 flex flex-wrap gap-1 text-[10px] leading-[1.25]">
+                      {controlIntentLabel && (
+                        <span className="rounded border border-primary-100 bg-primary-050 px-1 text-primary-800">
+                          통제목적: {controlIntentLabel}
+                        </span>
+                      )}
+                      {legalBasisReviewDetail?.status === "verified" && (
+                        <span className="rounded border border-success-200 bg-success-050 px-1 text-success-800">
+                          원문 확인
+                        </span>
+                      )}
+                      {legalBasisReviewDetail?.status === "review_required" && (
+                        <span
+                          className="rounded border border-warning-200 bg-warning-050 px-1 text-warning-800"
+                          title={legalBasisReviewDetail.reason || legalBasisReviewDetail.applicabilityReason}
+                        >
+                          검토 후보
+                        </span>
+                      )}
+                      {legalBasisReviewDetail?.status === "unknown" && (
+                        <span className="rounded border border-neutral-200 bg-neutral-50 px-1 text-neutral-700">
+                          확인 불가
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <textarea
-                    className={BODY_EDITABLE_TEXT}
+                    className={legalBasisTextareaClass}
                     value={row.legalBasis}
                     placeholder={!row.legalBasis.trim() && legalBasisReviewRequiredByRow[index] ? "검토 필요" : ""}
                     aria-label={`법적기준-${index + 1}`}
                     disabled={readOnly}
                     onChange={(event) => onChange(index, "legalBasis", event.target.value)}
                   />
+                  {legalBasisReviewDetail?.evidenceExcerpt && (
+                    <details className="mt-1 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-1 text-[10px] leading-[1.45]">
+                      <summary className="cursor-pointer font-semibold text-neutral-700">원문 근거</summary>
+                      <p className="mt-1 text-neutral-800">{legalBasisReviewDetail.evidenceExcerpt}</p>
+                      {legalBasisReviewDetail.applicabilityReason && (
+                        <p className="mt-1 text-neutral-600">
+                          적용 판단: {legalBasisReviewDetail.applicabilityReason}
+                        </p>
+                      )}
+                    </details>
+                  )}
                 </td>
                 <td className={`${BODY_TEXT_CELL}${reviewFields.has("currentMeasure") ? reviewCellClass : ""}`}>
                   <textarea

@@ -116,6 +116,26 @@ export function normalizeHazardType(type?: string, fallbackText?: string) {
   return "";
 }
 
+export function resolveLegalContextHazardType(
+  sourceText: string,
+  aiHazardType: string,
+  aiContext = "",
+) {
+  const normalizedSource = (sourceText ?? "").trim();
+  const hasVehicleEquipment = /(지게차|차량|이동장비|운반기계|구내운반차)/.test(normalizedSource);
+  const hasVehicleOperation = /(충돌|접촉|후진|주행|운반|이송|유도자|신호수)/.test(normalizedSource);
+  if (hasVehicleEquipment && hasVehicleOperation) {
+    return "차량/이동장비 충돌" as const;
+  }
+
+  const sourceHazardType = normalizeHazardType(normalizedSource, normalizedSource);
+  if (sourceHazardType) {
+    return sourceHazardType;
+  }
+
+  return normalizeHazardType(aiHazardType, aiContext);
+}
+
 export function normalizeHazardTypeList(values: string[]) {
   const normalized = values
     .map((value) => normalizeHazardType(value, value))

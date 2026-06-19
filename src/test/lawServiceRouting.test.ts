@@ -72,6 +72,28 @@ describe("Law service route isolation", () => {
     );
   });
 
+  it("passes Gemini semantic intents to the form law backend", async () => {
+    const { FormLawService } = await import("@/services/formLawService");
+    const semanticIntents = [
+      {
+        rowIndex: 0,
+        hazardType: "절단",
+        accidentMechanism: "회전 절단날 접촉으로 인한 절단",
+        unsafeCondition: "방호덮개 미설치",
+        equipment: ["절단기"],
+        searchTerms: ["절단기 방호덮개", "회전 절단날 접촉 방지"],
+      },
+    ];
+
+    await FormLawService.searchLaws("절단 작업", profile, { semanticIntents });
+
+    expect(invokeBackendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ semanticIntents }),
+      }),
+    );
+  });
+
   it("FormLawService uses legacy endpoint when flag is false", async () => {
     vi.stubEnv("VITE_USE_FORM_LAW_BACKEND", "false");
     const { FormLawService } = await import("@/services/formLawService");

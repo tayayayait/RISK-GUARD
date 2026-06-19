@@ -67,8 +67,9 @@ describe("FormService inferred risk narrative generation", () => {
     const mechanismPattern = /(미흡|미착용|미준수|미확인|개방|불량|통제)/;
     const signatures = rows.map((row) => `${row.cause}|${row.hazardFactor}`);
 
-    expect(rows.length).toBeGreaterThanOrEqual(2);
-    expect(rows.length).toBeLessThanOrEqual(3);
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.length).toBeLessThanOrEqual(2);
+    expect(new Set(rows.map((row) => row.controlIntent)).size).toBe(rows.length);
     expect(new Set(signatures).size).toBe(signatures.length);
     expect(rows.every((row) => mechanismPattern.test(`${row.cause} ${row.hazardFactor}`))).toBe(true);
   });

@@ -9,15 +9,7 @@ import { useAssessment } from "@/contexts/AssessmentContext";
 import { EvidenceSummaryService, type EvidenceSummaryResult } from "@/services/evidenceSummaryService";
 import type { ApiStatuses, EvidenceAiSummary, EvidenceItem } from "@/types/assessment";
 
-type TabType = "case" | "fatality" | "law" | "guide" | "media";
-type LawCategory = "1" | "2" | "3" | "4";
-
-const LAW_CATEGORY_TABS: Array<{ id: LawCategory; label: string }> = [
-  { id: "1", label: "산업안전보건법" },
-  { id: "2", label: "산업안전보건법 시행령" },
-  { id: "3", label: "산업안전보건법 시행규칙" },
-  { id: "4", label: "산업안전보건기준에 관한 규칙" },
-];
+type TabType = "case" | "fatality" | "guide" | "media";
 
 function sourceStatusMessage(status: string) {
   if (status === "loading") return "로딩 중";
@@ -29,53 +21,15 @@ function sourceStatusMessage(status: string) {
 }
 
 function isKnowledgeTab(tab: TabType) {
-  return tab === "law" || tab === "guide" || tab === "media";
+  return tab === "guide" || tab === "media";
 }
 
-function deriveLawCategoryFromText(text?: string): LawCategory | undefined {
-  const normalized = (text ?? "").replace(/\s+/g, "");
-  if (!normalized) {
-    return undefined;
-  }
-
-  if (normalized.includes("산업안전보건기준에관한규칙")) return "4";
-  if (normalized.includes("산업안전보건법시행규칙")) return "3";
-  if (normalized.includes("산업안전보건법시행령")) return "2";
-  if (normalized.includes("산업안전보건법")) return "1";
-  return undefined;
-}
-
-function resolveLawCategory(item: Pick<EvidenceItem, "lawCategory" | "legalBasis" | "title">): LawCategory | undefined {
-  return item.lawCategory
-    ?? deriveLawCategoryFromText(item.legalBasis)
-    ?? deriveLawCategoryFromText(item.title);
-}
-
-function firstLawCategoryWithData(items: EvidenceItem[]): LawCategory {
-  for (const tab of LAW_CATEGORY_TABS) {
-    const hasItem = items.some((item) =>
-      item.type === "law"
-      && item.sourceBadge !== "Guide"
-      && item.sourceBadge !== "미디어"
-      && (resolveLawCategory(item) ?? "1") === tab.id
-    );
-    if (hasItem) {
-      return tab.id;
-    }
-  }
-  return "1";
-}
-
-function matchesTab(item: EvidenceItem, tab: TabType, activeLawCategory: LawCategory) {
+function matchesTab(item: EvidenceItem, tab: TabType) {
   if (tab === "case") return item.type === "case";
   if (tab === "fatality") return item.type === "fatality";
   if (tab === "guide") return item.type === "law" && item.sourceBadge === "Guide";
   if (tab === "media") return item.type === "law" && item.sourceBadge === "미디어";
-  const lawCategory = resolveLawCategory(item) ?? "1";
-  return item.type === "law"
-    && item.sourceBadge !== "Guide"
-    && item.sourceBadge !== "미디어"
-    && lawCategory === activeLawCategory;
+  return false;
 }
 
 function buildDetailContent(item: EvidenceItem) {
@@ -128,7 +82,6 @@ export default function EvidenceBoard() {
   const { assessment, loadEvidence, selectCitation, toggleEvidenceExcluded, setCurrentStep, updateField } = useAssessment();
 
   const [activeTab, setActiveTab] = useState<TabType>("case");
-  const [activeLawCategory, setActiveLawCategory] = useState<LawCategory>("1");
   const [keyword, setKeyword] = useState("");
   const [hideExcluded, setHideExcluded] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
@@ -161,43 +114,18 @@ export default function EvidenceBoard() {
   );
 
   const evidenceItems = useMemo(() => assessment?.evidenceItems ?? [], [assessment?.evidenceItems]);
-  const lawItems = useMemo(
-    () => evidenceItems.filter((item) => item.type === "law" && item.sourceBadge === "법령"),
-    [evidenceItems],
-  );
   const lawGuideMeta = assessment?.lawGuideMeta ?? null;
   const lawGuideTrackStatus = useMemo(
     () => ({
-      law: lawGuideMeta?.trackStatus?.law ?? ((lawGuideMeta?.trackCounts.law ?? 0) > 0 ? "success" : "empty"),
       guide: lawGuideMeta?.trackStatus?.guide ?? ((lawGuideMeta?.trackCounts.guide ?? 0) > 0 ? "success" : "empty"),
       media: lawGuideMeta?.trackStatus?.media ?? ((lawGuideMeta?.trackCounts.media ?? 0) > 0 ? "success" : "empty"),
     }),
     [lawGuideMeta],
   );
 
-  const lawCategoryCounts = useMemo(() => {
-    const counts: Record<LawCategory, number> = {
-      "1": 0,
-      "2": 0,
-      "3": 0,
-      "4": 0,
-    };
-
-    for (const item of lawItems) {
-      const category = resolveLawCategory(item) ?? "1";
-      counts[category] += 1;
-    }
-
-    return counts;
-  }, [lawItems]);
-
-  useEffect(() => {
-    setActiveLawCategory(firstLawCategoryWithData(lawItems));
-  }, [lawItems]);
-
   const activeLawGuideItems = useMemo(
-    () => evidenceItems.filter((item) => matchesTab(item, activeTab, activeLawCategory)),
-    [evidenceItems, activeLawCategory, activeTab],
+    () => evidenceItems.filter((item) => matchesTab(item, activeTab)),
+    [evidenceItems, activeTab],
   );
 
   const activeApiCount = useMemo(
@@ -207,7 +135,7 @@ export default function EvidenceBoard() {
 
   const lowerKeyword = keyword.trim().toLowerCase();
   const filteredItems = evidenceItems.filter((item) => {
-    if (!matchesTab(item, activeTab, activeLawCategory)) return false;
+    if (!matchesTab(item, activeTab)) return false;
     if (hideExcluded && item.excluded) return false;
     if (!lowerKeyword) return true;
     const target = `${item.title} ${item.summaryBullets.join(" ")} ${item.keywords.join(" ")} ${item.legalBasis ?? ""} ${item.fullContent ?? ""} ${item.clausePreview ?? ""}`.toLowerCase();
@@ -224,7 +152,7 @@ export default function EvidenceBoard() {
           <div className="space-y-space-2 text-body-sm text-neutral-700">
             <div>재해사례: {sourceStatusMessage(assessment.apiStatuses.disasterCase)}</div>
             <div>사망사고: {sourceStatusMessage(assessment.apiStatuses.fatalityCase)}</div>
-            <div>법령/Guide/미디어(집계): {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
+            <div>Guide/미디어(집계): {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
             <div>교육자료: {sourceStatusMessage(assessment.apiStatuses.materials)}</div>
           </div>
         </div>
@@ -244,7 +172,7 @@ export default function EvidenceBoard() {
           <div className="rounded-radius-md border border-neutral-200 bg-neutral-50 p-space-4 text-body-sm text-neutral-700 space-y-space-2">
             <div>유사 재해사례 수집: {sourceStatusMessage(assessment.apiStatuses.disasterCase)}</div>
             <div>사고사망 사례 수집: {sourceStatusMessage(assessment.apiStatuses.fatalityCase)}</div>
-            <div>법령/Guide/미디어 수집: {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
+            <div>Guide/미디어 수집: {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
             <div>교육 자료 추천: {sourceStatusMessage(assessment.apiStatuses.materials)}</div>
           </div>
         </div>
@@ -252,13 +180,11 @@ export default function EvidenceBoard() {
     );
   }
 
-  const activeTrackCount = activeTab === "law"
-    ? (lawGuideMeta?.trackCounts.law ?? activeLawGuideItems.length)
-    : activeTab === "guide"
-      ? (lawGuideMeta?.trackCounts.guide ?? activeLawGuideItems.length)
-      : activeTab === "media"
-        ? (lawGuideMeta?.trackCounts.media ?? activeLawGuideItems.length)
-        : 0;
+  const activeTrackCount = activeTab === "guide"
+    ? (lawGuideMeta?.trackCounts.guide ?? activeLawGuideItems.length)
+    : activeTab === "media"
+      ? (lawGuideMeta?.trackCounts.media ?? activeLawGuideItems.length)
+      : 0;
 
   const guideEmptyReasonMessage = (() => {
     if (lawGuideTrackStatus.guide === "error") return "Guide 트랙 조회 실패";
@@ -268,7 +194,6 @@ export default function EvidenceBoard() {
   })();
 
   const activeTrackErrors = (() => {
-    if (activeTab === "law") return lawGuideMeta?.trackErrors?.law ?? [];
     if (activeTab === "guide") return lawGuideMeta?.trackErrors?.guide ?? [];
     if (activeTab === "media") return lawGuideMeta?.trackErrors?.media ?? [];
     return [];
@@ -354,8 +279,7 @@ export default function EvidenceBoard() {
         <div className="space-y-space-2 text-body-sm text-neutral-700">
           <div>재해사례: {sourceStatusMessage(assessment.apiStatuses.disasterCase)}</div>
           <div>사망사고: {sourceStatusMessage(assessment.apiStatuses.fatalityCase)}</div>
-          <div>법령/Guide/미디어(집계): {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
-          <div>법령 트랙: {sourceStatusMessage(lawGuideTrackStatus.law)}</div>
+          <div>Guide/미디어(집계): {sourceStatusMessage(assessment.apiStatuses.lawGuide)}</div>
           <div>Guide 트랙: {sourceStatusMessage(lawGuideTrackStatus.guide)}</div>
           <div>미디어 트랙: {sourceStatusMessage(lawGuideTrackStatus.media)}</div>
         </div>
@@ -386,7 +310,7 @@ export default function EvidenceBoard() {
       <DashboardShell currentStep="evidence" rightPanel={rightPanel}>
         <div className="bg-surface rounded-radius-lg border border-border p-space-6 mb-space-5">
           <h1 className="text-heading-1 text-neutral-900 mb-space-2">근거 화면</h1>
-          <p className="text-body-md text-neutral-500">재해/법령 근거를 검토하고 필요한 항목을 인용 목록에 추가하세요.</p>
+          <p className="text-body-md text-neutral-500">재해 근거를 검토하고 필요한 항목을 인용 목록에 추가하세요.</p>
         </div>
 
         {(assessment.apiStatuses.disasterCase === "error" ||
@@ -409,9 +333,6 @@ export default function EvidenceBoard() {
             <Button variant={activeTab === "fatality" ? "default" : "outline"} onClick={() => setActiveTab("fatality")} className="h-9">
               사고사망 사례
             </Button>
-            <Button variant={activeTab === "law" ? "default" : "outline"} onClick={() => setActiveTab("law")} className="h-9">
-              법령
-            </Button>
             <Button variant={activeTab === "guide" ? "default" : "outline"} onClick={() => setActiveTab("guide")} className="h-9">
               KOSHA Guide
             </Button>
@@ -419,23 +340,6 @@ export default function EvidenceBoard() {
               미디어
             </Button>
           </div>
-
-          {activeTab === "law" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-2 mb-space-3">
-              {LAW_CATEGORY_TABS.map((lawTab) => (
-                <Button
-                  key={lawTab.id}
-                  type="button"
-                  variant={activeLawCategory === lawTab.id ? "default" : "outline"}
-                  className="h-auto min-h-[3rem] py-space-2 px-space-3 justify-between"
-                  onClick={() => setActiveLawCategory(lawTab.id)}
-                >
-                  <span className="text-left whitespace-normal">{lawTab.label}</span>
-                  <span className="text-caption">({lawCategoryCounts[lawTab.id]})</span>
-                </Button>
-              ))}
-            </div>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-space-2">
             <Input
@@ -451,11 +355,8 @@ export default function EvidenceBoard() {
 
           {isKnowledgeTab(activeTab) && (
             <div className="mt-space-3 rounded-radius-md border border-neutral-200 bg-neutral-50 px-space-3 py-space-2 text-caption text-neutral-700 space-y-1">
-              {activeTab === "law" && (
-                <div>법령 범위: 스마트검색 1~4 (산업안전보건법, 시행령, 시행규칙, 기준에 관한 규칙)</div>
-              )}
-              <div>트랙 건수: 법령 {lawGuideMeta?.trackCounts.law ?? 0}건 · Guide {lawGuideMeta?.trackCounts.guide ?? 0}건 · 미디어 {lawGuideMeta?.trackCounts.media ?? 0}건</div>
-              <div>출처 집계({activeTab === "law" ? "법령" : activeTab === "guide" ? "Guide" : "미디어"}): API {activeApiCount}</div>
+              <div>트랙 건수: Guide {lawGuideMeta?.trackCounts.guide ?? 0}건 · 미디어 {lawGuideMeta?.trackCounts.media ?? 0}건</div>
+              <div>출처 집계({activeTab === "guide" ? "Guide" : "미디어"}): API {activeApiCount}</div>
               {activeTab === "guide" && activeTrackCount === 0 && guideEmptyReasonMessage && <div>Guide 상태: {guideEmptyReasonMessage}</div>}
               {isKnowledgeTab(activeTab) && activeTrackErrors.length > 0 && (
                 <div>트랙 오류: {activeTrackErrors.join(" | ")}</div>
@@ -465,11 +366,7 @@ export default function EvidenceBoard() {
         </div>
 
         {filteredItems.length === 0 ? (
-          activeTab === "law" && lawCategoryCounts[activeLawCategory] === 0 ? (
-            <div className="rounded-radius-lg border border-border bg-surface p-space-6 text-center text-body-md text-neutral-600">
-              선택한 법령 영역 결과 없음
-            </div>
-          ) : activeTab === "guide" && guideEmptyReasonMessage ? (
+          activeTab === "guide" && guideEmptyReasonMessage ? (
             <div className="rounded-radius-lg border border-border bg-surface p-space-6 text-center text-body-md text-neutral-600">
               Guide 결과가 없습니다. {guideEmptyReasonMessage}
             </div>

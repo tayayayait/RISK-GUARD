@@ -2,6 +2,9 @@ import { normalizeHazardType } from "../../supabase/functions/_shared/hazard-tax
 import { HAZARD_ARTICLE_MAP } from "../../supabase/functions/_shared/hazard-article-map.ts";
 import type { AssessmentData, EvidenceItem, HazardItem, LawActionItem } from "@/types/assessment";
 import type { CompanyProfile } from "@/types/companyProfile";
+import { getRiskControlIntentSearchTerms, resolveRiskControlIntent } from "@/lib/riskControlIntent";
+import { assignUniqueLegalBasisOptions } from "@/lib/riskLegalBasisAssignment";
+export { assignUniqueLegalBasisOptions } from "@/lib/riskLegalBasisAssignment";
 import type {
   AccidentReportData,
   RiskAssessmentRow,
@@ -987,6 +990,7 @@ function buildHazardMechanismSignature(hazard: HazardItem, fallbackHazardType: s
   const action = mechanismAxes.action[0] || inferOperationDescriptor(mergedText);
   const failure = inferFailureDescriptor(mergedText, hazardType);
   const risk = mechanismAxes.risk[0] || hazardTypeRiskLabel(hazardType);
+  const controlIntent = hazard.controlIntent || resolveRiskControlIntent(mergedText, hazardType);
 
   return [
     hazardType,
@@ -994,6 +998,7 @@ function buildHazardMechanismSignature(hazard: HazardItem, fallbackHazardType: s
     action,
     failure,
     risk,
+    controlIntent,
   ]
     .map((token) => toCompact(token))
     .filter((token) => token.length >= 2)
@@ -1063,8 +1068,13 @@ function buildContextSignalHazards(assessment: AssessmentData, fallbackHazardTyp
 
 function selectRiskHazards(assessment: AssessmentData) {
   const preferredTargetCount = estimateRiskRowCountFromDescription(assessment.taskDescription);
-  const minimumTargetCount = RISK_ROW_MIN_COUNT;
   const taskContextProfile = buildTaskContextProfile(assessment);
+  const explicitProfileHazardTypes = normalizeHazardHints(
+    (assessment.profile.hazards ?? []).map((hazard) => hazard.type ?? ""),
+  );
+  const allowedSelectionHazardTypes = explicitProfileHazardTypes.length === 1
+    ? explicitProfileHazardTypes
+    : taskContextProfile.hazardTypes;
   const fallbackHazardType = resolveHazardTypeWithContext(
     assessment.taskDescription,
     `${assessment.taskName} ${assessment.analysis.scenario}`,
@@ -1147,15 +1157,24 @@ function selectRiskHazards(assessment: AssessmentData) {
   const selected: HazardItem[] = [];
   const usedHazardTypes = new Set<string>();
   const usedMechanismSignatures = new Set<string>();
+  const usedControlIntentSignatures = new Set<string>();
   const trySelect = (hazard: HazardItem, preferDiversity: boolean) => {
     const hazardType = resolveHazardTypeWithContext(
       `${hazard.name} ${hazard.reason}`,
       hazard.type,
       fallbackHazardType,
     ) || fallbackHazardType;
-    if (!isHazardTypeAllowedByTaskContext(hazardType, taskContextProfile)) {
+    if (
+      !isHazardTypeAllowedByTaskContext(hazardType, taskContextProfile)
+      || (allowedSelectionHazardTypes.length > 0 && !allowedSelectionHazardTypes.includes(hazardType))
+    ) {
       return false;
     }
+    const controlIntent = hazard.controlIntent || resolveRiskControlIntent(
+      `${hazard.reason} ${hazard.name}`,
+      hazardType,
+    );
+    const controlIntentSignature = `${hazardType}|${controlIntent}`;
     const mechanismSignature = buildHazardMechanismSignature(hazard, fallbackHazardType);
     if (preferDiversity && taskContextProfile.hazardTypes.length > 1 && usedHazardTypes.has(hazardType)) {
       return false;
@@ -1163,12 +1182,16 @@ function selectRiskHazards(assessment: AssessmentData) {
     if (usedMechanismSignatures.has(mechanismSignature)) {
       return false;
     }
+    if (usedControlIntentSignatures.has(controlIntentSignature)) {
+      return false;
+    }
     if (selected.some((existing) => hazardsAreNearDuplicate(existing, hazard))) {
       return false;
     }
-    selected.push({ ...hazard, type: hazardType });
+    selected.push({ ...hazard, type: hazardType, controlIntent });
     usedHazardTypes.add(hazardType);
     usedMechanismSignatures.add(mechanismSignature);
+    usedControlIntentSignatures.add(controlIntentSignature);
     return true;
   };
 
@@ -1196,8 +1219,11 @@ function selectRiskHazards(assessment: AssessmentData) {
     taskContextProfile,
   );
   const mechanismFallbackTypes = fallbackTypes.length > 0
-    ? fallbackTypes
+    ? fallbackTypes.filter((hazardType) => allowedSelectionHazardTypes.includes(hazardType))
     : [taskContextProfile.primaryHazardType || fallbackHazardType];
+  if (mechanismFallbackTypes.length === 0) {
+    mechanismFallbackTypes.push(allowedSelectionHazardTypes[0] || taskContextProfile.primaryHazardType || fallbackHazardType);
+  }
   let fallbackIndex = 0;
   let safetyCounter = 0;
   while (selected.length < preferredTargetCount && safetyCounter < 24) {
@@ -1225,7 +1251,7 @@ function selectRiskHazards(assessment: AssessmentData) {
     }
   }
 
-  while (selected.length < minimumTargetCount) {
+  if (selected.length === 0) {
     const hazardType = mechanismFallbackTypes[fallbackIndex % mechanismFallbackTypes.length]
       || taskContextProfile.primaryHazardType
       || fallbackHazardType;
@@ -1234,13 +1260,12 @@ function selectRiskHazards(assessment: AssessmentData) {
     selected.push({
       ...fallbackHazard,
       type: hazardType,
-      id: `forced-fallback-${fallbackIndex}`,
+      controlIntent: resolveRiskControlIntent(`${fallbackHazard.reason} ${fallbackHazard.name}`, hazardType),
+      id: `single-fallback-${fallbackIndex}`,
     });
   }
 
-  const finalTargetCount = selected.length >= minimumTargetCount
-    ? Math.min(preferredTargetCount, selected.length)
-    : minimumTargetCount;
+  const finalTargetCount = Math.min(preferredTargetCount, selected.length);
   return selected.slice(0, finalTargetCount);
 }
 
@@ -1287,7 +1312,7 @@ function normalizeRiskNarratives(assessment: AssessmentData, hazard: HazardItem,
 }
 
 function buildNarrativeMechanismKey(
-  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">,
+  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor" | "controlIntent">,
 ) {
   const hazardType = resolveRowHazardType(row) || row.category || "추락";
   const mergedText = normalizeSpace(`${row.workProcess ?? ""} ${row.cause ?? ""} ${row.hazardFactor ?? ""}`);
@@ -1296,6 +1321,7 @@ function buildNarrativeMechanismKey(
   const action = mechanismAxes.action[0] || inferOperationDescriptor(mergedText);
   const failure = inferFailureDescriptor(mergedText, hazardType);
   const risk = mechanismAxes.risk[0] || hazardTypeRiskLabel(hazardType);
+  const controlIntent = row.controlIntent || resolveRiskControlIntent(mergedText, hazardType);
 
   return [
     hazardType,
@@ -1303,6 +1329,7 @@ function buildNarrativeMechanismKey(
     action,
     failure,
     risk,
+    controlIntent,
   ]
     .map((token) => toCompact(token))
     .filter((token) => token.length >= 2)
@@ -1746,6 +1773,7 @@ function enforceRiskRowsConsistency(
       category: nextRow.category,
       cause: nextRow.cause,
       hazardFactor: nextRow.hazardFactor,
+      controlIntent: nextRow.controlIntent,
     }], rowScopedContext);
     nextRow.legalBasis = resolvedLegalBasis ?? "";
 
@@ -1762,6 +1790,7 @@ export interface RiskLawContext {
   equipmentTokens?: string[];
   taskHazardTypes?: string[];
   taskContextTokens?: string[];
+  requireVerifiedSource?: boolean;
 }
 
 export interface RiskRowsValidationOptions {
@@ -1782,25 +1811,30 @@ export interface RiskLegalBasisCandidateOption {
   legalBasis: string;
   articleNumber: string;
   articleTitle: string;
+  clausePreview?: string;
+  originalText?: string;
   score: number;
-  sourceType: "storage" | "action" | "fallback";
+  sourceType: "storage" | "db" | "api" | "action" | "fallback";
 }
 
 interface LegalBasisCandidate {
   legalBasis: string;
   articleNumber: string;
   articleTitle: string;
+  clausePreview?: string;
+  originalText?: string;
   searchText: string;
   contextSearchText: string;
   relevanceScore: number;
   sourceWeight: number;
   hazardTypes: string[];
-  sourceType: "storage" | "action" | "fallback";
+  sourceType: "storage" | "db" | "api" | "action" | "fallback";
 }
 
 interface LegalBasisScore {
   score: number;
   hazardTypeMatched: boolean;
+  controlIntentMatches: number;
   hazardTokenMatches: number;
   rowSpecificTokenMatches: number;
   keywordDensity: number;
@@ -1826,6 +1860,11 @@ interface RiskRowLegalBasisEvaluation {
   index: number;
   ranked: RankedLegalBasisCandidate[];
 }
+
+type RiskLegalBasisRow = Pick<
+  RiskAssessmentRow,
+  "workProcess" | "category" | "cause" | "hazardFactor" | "controlIntent"
+>;
 
 const HAZARD_MEASURE_TEMPLATE: Record<string, { current: string[]; reduction: string[] }> = {
   추락: {
@@ -2522,7 +2561,9 @@ function pickLawEvidenceItems(items: EvidenceItem[]) {
 
 function sourceWeightByLawItem(item: EvidenceItem) {
   if (item.sourceType === "storage") return 70;
-  return 0;
+  if (item.sourceType === "db") return 65;
+  if (item.sourceType === "api") return 55;
+  return 45;
 }
 
 function normalizeHazardHints(values: string[]) {
@@ -2533,13 +2574,9 @@ function normalizeHazardHints(values: string[]) {
   );
 }
 
-function buildStorageArticleTitleMap(candidates: LegalBasisCandidate[]) {
+function buildArticleTitleMap(candidates: LegalBasisCandidate[]) {
   const titleByArticle = new Map<string, string>();
   for (const candidate of candidates) {
-    if (candidate.sourceType !== "storage") {
-      continue;
-    }
-
     if (!candidate.articleNumber || !candidate.articleTitle) {
       continue;
     }
@@ -2610,6 +2647,8 @@ function buildRowFallbackCandidates(
     legalBasis: `${STANDARDS_RULES_LAW_NAME} ${entry.article}(${entry.title})`,
     articleNumber: entry.article,
     articleTitle: entry.title,
+    clausePreview: "",
+    originalText: "",
     searchText: `${entry.article} ${entry.title} ${entry.hazardType}`,
     contextSearchText: `${entry.article} ${entry.title} ${entry.hazardType} ${row.workProcess ?? ""} ${row.cause ?? ""} ${row.hazardFactor ?? ""}`,
     relevanceScore: 80,
@@ -2621,7 +2660,6 @@ function buildRowFallbackCandidates(
 
 function buildLegalBasisCandidates(context: RiskLawContext): LegalBasisCandidateSets {
   const evidenceCandidates: LegalBasisCandidate[] = (context.lawItems ?? [])
-    .filter((item) => item.sourceType === "storage")
     .filter((item) => isStandardsRulesLaw(`${item.legalBasis ?? ""} ${item.title}`))
     .map((item) => {
       const articleSource = item.articleNumber || item.legalBasis || item.title;
@@ -2689,17 +2727,19 @@ function buildLegalBasisCandidates(context: RiskLawContext): LegalBasisCandidate
         legalBasis: finalLegalBasis,
         articleNumber,
         articleTitle: finalTitle,
+        clausePreview: normalizeSpace(item.clausePreview ?? ""),
+        originalText: normalizeSpace(item.fullContent ?? item.clausePreview ?? ""),
         searchText,
         contextSearchText,
         relevanceScore: item.relevanceScore,
         sourceWeight: sourceWeightByLawItem(item),
         hazardTypes,
-        sourceType: "storage",
+        sourceType: item.sourceType ?? "api",
       };
     })
     .filter((candidate): candidate is LegalBasisCandidate => Boolean(candidate));
 
-  const storageTitleByArticle = buildStorageArticleTitleMap(evidenceCandidates);
+  const articleTitleByArticle = buildArticleTitleMap(evidenceCandidates);
 
   const actionCandidates: LegalBasisCandidate[] = (context.lawActionItems ?? [])
     .filter((item) => item.articleNumbers.length > 0)
@@ -2727,8 +2767,8 @@ function buildLegalBasisCandidates(context: RiskLawContext): LegalBasisCandidate
 
       return item.articleNumbers.map((articleNumber) => {
         const normalizedArticleNumber = extractArticleNumber(articleNumber);
-        const storageArticleTitle = storageTitleByArticle.get(normalizedArticleNumber);
-        if (!normalizedArticleNumber || !storageArticleTitle) {
+        const sourceArticleTitle = articleTitleByArticle.get(normalizedArticleNumber);
+        if (!normalizedArticleNumber || !sourceArticleTitle) {
           return null;
         }
         const actionContextText = [
@@ -2743,7 +2783,7 @@ function buildLegalBasisCandidates(context: RiskLawContext): LegalBasisCandidate
           item.keyExcerpt ?? "",
           item.summaryArticle ?? "",
         ].join(" ");
-        const legalBasis = formatStandardsRulesLegalBasis(normalizedArticleNumber, storageArticleTitle);
+        const legalBasis = formatStandardsRulesLegalBasis(normalizedArticleNumber, sourceArticleTitle);
         if (!legalBasis || !isStrictLegalBasisFormat(legalBasis)) {
           return null;
         }
@@ -2751,7 +2791,9 @@ function buildLegalBasisCandidates(context: RiskLawContext): LegalBasisCandidate
         return {
           legalBasis,
           articleNumber: normalizedArticleNumber,
-          articleTitle: storageArticleTitle,
+          articleTitle: sourceArticleTitle,
+          clausePreview: normalizeSpace(item.clausePreview ?? ""),
+          originalText: normalizeSpace(item.clausePreview ?? ""),
           searchText: actionSearchText,
           contextSearchText: actionContextText,
           relevanceScore: 0,
@@ -2852,6 +2894,7 @@ function scoreLegalBasisCandidate(
   rowHazardType: string | undefined,
   hazardTokens: string[],
   rowSpecificTokens: string[],
+  controlIntentTokens: string[],
   workTokens: string[],
   equipmentTokens: string[],
   rowContextAxes: ContextAxes,
@@ -2887,6 +2930,7 @@ function scoreLegalBasisCandidate(
 
   const hazardTokenMatches = countTokenMatches(hazardTarget, hazardTokens);
   const rowSpecificTokenMatches = countTokenMatches(hazardTarget, rowSpecificTokens);
+  const controlIntentMatches = countTokenMatches(hazardTarget, controlIntentTokens);
   const workMatches = countTokenMatches(contextTarget, specificWorkTokens);
   const equipmentMatches = countTokenMatches(contextTarget, specificEquipmentTokens);
   const taskContextMatches = countTokenMatches(contextTarget, taskContextTokens);
@@ -2947,6 +2991,7 @@ function scoreLegalBasisCandidate(
     + (taskHazardTypeMatched ? 10 : 0)
     + Math.min(3, hazardTokenMatches) * 12
     + Math.min(3, rowSpecificTokenMatches) * 10
+    + Math.min(3, controlIntentMatches) * 22
     + (workMatches > 0 ? 10 : 0)
     + (equipmentMatches > 0 ? 10 : 0)
     + Math.min(3, taskContextMatches) * 6
@@ -3003,6 +3048,7 @@ function scoreLegalBasisCandidate(
   return {
     score,
     hazardTypeMatched,
+    controlIntentMatches,
     hazardTokenMatches,
     rowSpecificTokenMatches,
     keywordDensity,
@@ -3030,7 +3076,7 @@ function legalBasisDedupKey(candidate: Pick<LegalBasisCandidate, "legalBasis" | 
 }
 
 function rankLegalBasisCandidatesForRow(
-  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">,
+  row: RiskLegalBasisRow,
   context: RiskLawContext,
   candidates: LegalBasisCandidate[],
 ) {
@@ -3042,6 +3088,9 @@ function rankLegalBasisCandidatesForRow(
 
   const hazardTokens = createHazardTokens(row);
   const rowSpecificTokens = createRowSpecificHazardTokens(row, rowHazardType);
+  const controlIntentTokens = row.controlIntent
+    ? getRiskControlIntentSearchTerms(row.controlIntent)
+    : [];
 
   const workTokens = unique([
     ...tokenize(row.workProcess ?? ""),
@@ -3074,6 +3123,7 @@ function rankLegalBasisCandidatesForRow(
         rowHazardType,
         hazardTokens,
         rowSpecificTokens,
+        controlIntentTokens,
         workTokens,
         equipmentTokens,
         rowContextAxes,
@@ -3325,14 +3375,14 @@ export function getRiskLawContextFromAssessment(assessment: AssessmentData): Ris
 }
 
 export function resolveRiskRowLegalBasis(
-  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">,
+  row: RiskLegalBasisRow,
   context: RiskLawContext,
 ) {
   return resolveRiskRowsLegalBasis([row], context)[0] ?? "";
 }
 
 function evaluateRiskRowsLegalBasis(
-  rows: Array<Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">>,
+  rows: RiskLegalBasisRow[],
   context: RiskLawContext,
 ) {
   const { storageCandidates, actionCandidates } = buildLegalBasisCandidates(context);
@@ -3367,7 +3417,9 @@ function evaluateRiskRowsLegalBasis(
   const evaluations: RiskRowLegalBasisEvaluation[] = rows.map((row, index) => {
     const rowHazardType = resolveRowHazardType(row);
     const rankedStorage = rankLegalBasisCandidatesForRow(row, context, storageCandidates);
-    const rowFallbackCandidates = buildRowFallbackCandidates(row, rowHazardType || undefined);
+    const rowFallbackCandidates = context.requireVerifiedSource
+      ? []
+      : buildRowFallbackCandidates(row, rowHazardType || undefined);
     const rankedFallback = rankLegalBasisCandidatesForRow(row, context, rowFallbackCandidates);
     const rankedAction = rankLegalBasisCandidatesForRow(row, context, actionCandidates);
     const rankedPrimary = mergeRankedCandidates(rankedStorage, rankedAction);
@@ -3398,6 +3450,8 @@ function mapRiskRowCandidateOptions(
       legalBasis: item.candidate.legalBasis,
       articleNumber: item.candidate.articleNumber,
       articleTitle: item.candidate.articleTitle,
+      clausePreview: item.candidate.clausePreview,
+      originalText: item.candidate.originalText,
       score: item.score,
       sourceType: item.candidate.sourceType,
     });
@@ -3410,7 +3464,7 @@ function mapRiskRowCandidateOptions(
 }
 
 export function getRiskRowsLegalBasisCandidateOptions(
-  rows: Array<Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">>,
+  rows: RiskLegalBasisRow[],
   context: RiskLawContext,
   maxCandidates = 3,
 ) {
@@ -3430,54 +3484,21 @@ export function getRiskRowsLegalBasisCandidateOptions(
 }
 
 export function resolveRiskRowsLegalBasis(
-  rows: Array<Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">>,
+  rows: RiskLegalBasisRow[],
   context: RiskLawContext,
 ) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return [];
   }
   const evaluations = evaluateRiskRowsLegalBasis(rows, context);
-
-  const sortedByCandidateScarcity = evaluations
-    .slice()
-    .sort((left, right) => {
-      if (left.ranked.length !== right.ranked.length) {
-        return left.ranked.length - right.ranked.length;
-      }
-      const leftTopScore = left.ranked[0]?.score ?? Number.NEGATIVE_INFINITY;
-      const rightTopScore = right.ranked[0]?.score ?? Number.NEGATIVE_INFINITY;
-      return rightTopScore - leftTopScore;
-    });
-
-  const resolved = rows.map(() => "");
-  const usedLegalBasisKeys = new Set<string>();
-
-  for (const item of sortedByCandidateScarcity) {
-    if (item.ranked.length === 0) {
-      resolved[item.index] = "";
-      continue;
-    }
-
-    const selected = item.ranked.find(({ candidate }) => {
-      const legalBasisKey = legalBasisDedupKey(candidate);
-      return Boolean(legalBasisKey) && !usedLegalBasisKeys.has(legalBasisKey);
-    });
-    if (!selected) {
-      resolved[item.index] = "";
-      continue;
-    }
-
-    const resolvedLegalBasis = isStrictLegalBasisFormat(selected.candidate.legalBasis)
-      ? selected.candidate.legalBasis
-      : "";
-    resolved[item.index] = resolvedLegalBasis;
-    if (resolvedLegalBasis) {
-      const legalBasisKey = legalBasisDedupKey(selected.candidate);
-      if (legalBasisKey) {
-        usedLegalBasisKeys.add(legalBasisKey);
-      }
-    }
+  const optionsByRow = rows.map(() => [] as RiskLegalBasisCandidateOption[]);
+  for (const evaluation of evaluations) {
+    optionsByRow[evaluation.index] = mapRiskRowCandidateOptions(
+      evaluation.ranked,
+      Math.max(1, evaluation.ranked.length),
+    );
   }
+  const resolved = assignUniqueLegalBasisOptions(optionsByRow);
 
   return resolved.map((legalBasis) => (isStrictLegalBasisFormat(legalBasis) ? legalBasis : ""));
 }
@@ -3609,6 +3630,7 @@ function evaluateRiskRowValidationPass(
     category: row.category,
     cause: row.cause,
     hazardFactor: row.hazardFactor,
+    controlIntent: row.controlIntent,
   }], rowScopedContext)[0] ?? "";
 
   const failures: RiskRowValidationFailure[] = [];
@@ -3854,11 +3876,11 @@ export function validateRiskAssessmentRows(
             continue;
           }
           if (field === "currentMeasure") {
-            workingRow = { ...workingRow, currentMeasure: "" };
+            // Keep the rewritten safety measure visible for manual review.
             continue;
           }
           if (field === "reductionMeasure") {
-            workingRow = { ...workingRow, reductionMeasure: "" };
+            // Keep the rewritten safety measure visible for manual review.
             continue;
           }
           if (field === "legalBasis") {
@@ -3973,6 +3995,7 @@ export function createEmptyRiskAssessmentRow(seed: Partial<RiskAssessmentRow> = 
     reviewReasonCodes,
     expectedHazardType: normalizeSpace(seed.expectedHazardType ?? ""),
     detectedHazardType: normalizeSpace(seed.detectedHazardType ?? ""),
+    controlIntent: seed.controlIntent,
   };
 }
 
@@ -4401,6 +4424,10 @@ export const FormService = {
         improvementDate: "",
         completionDate: "",
         responsiblePerson: "",
+        controlIntent: hazard.controlIntent || resolveRiskControlIntent(
+          `${narratives.cause} ${narratives.hazardFactor}`,
+          hazard.type,
+        ),
       };
     });
 
@@ -4412,6 +4439,7 @@ export const FormService = {
         category: row.category,
         cause: row.cause,
         hazardFactor: row.hazardFactor,
+        controlIntent: row.controlIntent,
       })),
       lawContext,
     );

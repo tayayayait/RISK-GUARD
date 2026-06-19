@@ -320,7 +320,7 @@ export default function AssessmentInput() {
                 </div>
               </div>
               <div className="space-y-space-3">
-                {["유사 재해사례 자동 검색", "사고·법령 기반 위험등급 산정", "관련 법령·KOSHA Guide 자동 인용", "작업 전 안전 브리핑 문안 생성"].map((text, index) => (
+                {["유사 재해사례 자동 검색", "사고 기반 위험등급 산정", "관련 KOSHA Guide 자동 인용", "작업 전 안전 브리핑 문안 생성"].map((text, index) => (
                   <div key={index} className="flex items-center gap-space-2 text-body-sm text-neutral-700">
                     <div className="h-1.5 w-1.5 rounded-full bg-primary-700 shrink-0" />
                     {text}

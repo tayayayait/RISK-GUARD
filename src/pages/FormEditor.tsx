@@ -1,10 +1,11 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ChevronLeft, Download, Loader2, Sparkles } from "lucide-react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { analyzeTaskToAssessment } from "@/services/assessmentAnalysisService";
 import {
   FormService,
+  assignUniqueLegalBasisOptions,
   applyCompanyProfileDefaults,
   buildRiskRowValidationSummary,
   createEmptyRiskAssessmentRow,
@@ -18,7 +19,10 @@ import {
 import { CompanyProfileService } from "@/services/companyProfileService";
 import { FormLawService } from "@/services/formLawService";
 import { RiskLegalBasisFitService } from "@/services/riskLegalBasisFitService";
-import { RiskAssessmentTable } from "@/components/forms/RiskAssessmentTable";
+import {
+  RiskAssessmentTable,
+  type LegalBasisReviewDetail,
+} from "@/components/forms/RiskAssessmentTable";
 import { AccidentReportForm } from "@/components/forms/AccidentReportForm";
 import type {
   AccidentReportData,
@@ -35,12 +39,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { RISK_ASSESSMENT_TEMPLATE_HINT } from "@/lib/riskAssessmentTemplateHint";
 import { FormHistoryService } from "@/services/formHistoryService";
 import { RiskValidationAuditService } from "@/services/riskValidationAuditService";
 
 type FormType = "risk-assessment" | "accident-report";
+
+interface LegalBasisMatchRunOptions {
+  assessment: AssessmentData;
+  rows: RiskAssessmentRow[];
+  automatic?: boolean;
+}
+
+interface LegalBasisMatchRunResult {
+  matchedRows: number;
+  fallbackRows: number;
+  reviewRequiredRows: number;
+  failed: boolean;
+}
 
 function getDefaultTaskName(formType: FormType) {
   return formType === "risk-assessment" ? "위험성평가 기록서 작성 대상 작업" : "산업재해조사표 작성 대상 사고";
@@ -102,7 +120,7 @@ interface LegalBasisNormalizationResult {
 }
 
 function selectRemappedLegalBasis(
-  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor">,
+  row: Pick<RiskAssessmentRow, "workProcess" | "category" | "cause" | "hazardFactor" | "controlIntent">,
   lawContext: RiskLawContext,
   usedLegalBasisKeys: Set<string>,
 ) {
@@ -386,6 +404,9 @@ export default function FormEditor() {
   const [isAddingRiskWithAi, setIsAddingRiskWithAi] = useState(false);
   const [isMatchingLegalBasis, setIsMatchingLegalBasis] = useState(false);
   const [legalBasisReviewRequiredByRow, setLegalBasisReviewRequiredByRow] = useState<boolean[]>([]);
+  const [legalBasisReviewDetailsByRow, setLegalBasisReviewDetailsByRow] = useState<
+    Array<LegalBasisReviewDetail | undefined>
+  >([]);
   const [riskValidationSummary, setRiskValidationSummary] = useState<RiskRowValidationSummary | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyLoadError, setHistoryLoadError] = useState("");
@@ -413,6 +434,7 @@ export default function FormEditor() {
     setIsMatchingLegalBasis(false);
     setRiskData([]);
     setLegalBasisReviewRequiredByRow([]);
+    setLegalBasisReviewDetailsByRow([]);
     setRiskValidationSummary(null);
     lastRiskValidationEventsRef.current = [];
     setAccidentData(null);
@@ -449,6 +471,7 @@ export default function FormEditor() {
           setIsHistoryView(false);
           setRiskData([]);
           setLegalBasisReviewRequiredByRow([]);
+          setLegalBasisReviewDetailsByRow([]);
           setRiskValidationSummary(null);
           lastRiskValidationEventsRef.current = [];
           setAccidentData(null);
@@ -463,12 +486,14 @@ export default function FormEditor() {
           const normalizedRows = normalizeRiskAssessmentRows(record.riskRows || []);
           setRiskData(normalizedRows);
           setLegalBasisReviewRequiredByRow(normalizedRows.map(() => false));
+          setLegalBasisReviewDetailsByRow([]);
           setRiskValidationSummary(record.validationSummary ?? buildRiskRowValidationSummary(normalizedRows));
           lastRiskValidationEventsRef.current = record.validationEvents ?? [];
           setAccidentData(null);
         } else {
           setRiskData([]);
           setLegalBasisReviewRequiredByRow([]);
+          setLegalBasisReviewDetailsByRow([]);
           setRiskValidationSummary(null);
           lastRiskValidationEventsRef.current = [];
           if (!record.accidentData) {
@@ -487,6 +512,7 @@ export default function FormEditor() {
         setIsHistoryView(false);
         setRiskData([]);
         setLegalBasisReviewRequiredByRow([]);
+        setLegalBasisReviewDetailsByRow([]);
         setRiskValidationSummary(null);
         lastRiskValidationEventsRef.current = [];
         setAccidentData(null);
@@ -685,6 +711,17 @@ export default function FormEditor() {
     if (validatedRowsSnapshot) {
       setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(validatedRowsSnapshot));
     }
+    if (
+      field === "workProcess"
+      || field === "category"
+      || field === "cause"
+      || field === "hazardFactor"
+      || field === "legalBasis"
+    ) {
+      setLegalBasisReviewDetailsByRow((prev) => prev.map((detail, rowIndex) => (
+        rowIndex === index ? undefined : detail
+      )));
+    }
   }, [applyRiskRowsValidation, isHistoryView]);
 
   const handleReclassifyCategories = useCallback(() => {
@@ -708,6 +745,7 @@ export default function FormEditor() {
     if (validatedRowsSnapshot) {
       setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(validatedRowsSnapshot));
     }
+    setLegalBasisReviewDetailsByRow([]);
 
     toast({
       title: "분류 체계 적용 완료",
@@ -736,6 +774,7 @@ export default function FormEditor() {
     if (validatedRowsSnapshot) {
       setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(validatedRowsSnapshot));
     }
+    setLegalBasisReviewDetailsByRow((prev) => [...prev, undefined]);
   }, [applyRiskRowsValidation, isHistoryView, taskName]);
 
   const handleAddRiskByAi = useCallback(async () => {
@@ -851,43 +890,61 @@ export default function FormEditor() {
     applyRiskRowsValidation,
   ]);
 
-  const handleMatchLegalBasisWithAi = useCallback(async () => {
+  const handleMatchLegalBasisWithAi = useCallback(async (
+    options?: LegalBasisMatchRunOptions,
+  ): Promise<LegalBasisMatchRunResult> => {
+    const automatic = options?.automatic === true;
+    const targetAssessment = options?.assessment ?? analysisAssessment;
+    const targetRows = options?.rows ?? riskData;
     if (
       activeFormType !== "risk-assessment"
       || isHistoryView
       || isHistoryLoading
       || isMatchingLegalBasis
-      || isAnalyzing
+      || (!automatic && isAnalyzing)
       || isAddingRiskWithAi
-      || riskData.length === 0
+      || targetRows.length === 0
     ) {
-      return;
+      return { matchedRows: 0, fallbackRows: 0, reviewRequiredRows: 0, failed: false };
     }
 
-    if (!analysisAssessment) {
+    if (!targetAssessment) {
       toast({
         title: "법적기준 매칭 불가",
         description: "먼저 AI 분석 및 서식 자동작성을 실행해 주세요.",
         variant: "destructive",
       });
-      return;
+      return { matchedRows: 0, fallbackRows: 0, reviewRequiredRows: 0, failed: true };
     }
 
-    const snapshotRows = riskData.map((row) => ({ ...row }));
+    const snapshotRows = targetRows.map((row) => ({ ...row }));
     const snapshotSignatures = snapshotRows.map((row) => toRiskRowReviewSignature(row));
-    const resolvedTaskName = analysisAssessment.taskName.trim()
+    const resolvedTaskName = targetAssessment.taskName.trim()
       || taskName.trim()
       || getDefaultTaskName(activeFormType);
     setAnalysisError("");
     setIsMatchingLegalBasis(true);
 
     try {
+      let semanticIntents = await RiskLegalBasisFitService.analyzeRows({
+        taskName: resolvedTaskName,
+        contextText: contextText.trim() || targetAssessment.taskDescription,
+        rows: snapshotRows,
+      });
+      const analyzableRowCount = snapshotRows.filter((row) => row.cause.trim() || row.hazardFactor.trim()).length;
+      let usedLocalFallback = false;
+      if (!semanticIntents || semanticIntents.length !== analyzableRowCount) {
+        semanticIntents = [];
+        usedLocalFallback = true;
+      }
+
       const lawResult = await FormLawService.searchLaws(
         resolvedTaskName,
-        analysisAssessment.profile,
+        targetAssessment.profile,
         {
-          taskDescription: analysisAssessment.taskDescription,
-          analysisScenario: analysisAssessment.analysis.scenario,
+          taskDescription: targetAssessment.taskDescription,
+          analysisScenario: targetAssessment.analysis.scenario,
+          semanticIntents,
         },
       );
 
@@ -896,19 +953,30 @@ export default function FormEditor() {
         item.articleNumbers.some((articleNumber) => articleNumber.trim().length > 0),
       );
 
-      const defaultLawContext = getRiskLawContextFromAssessment(analysisAssessment);
+      const defaultLawContext = getRiskLawContextFromAssessment(targetAssessment);
       const resolvedLawContext: RiskLawContext = {
         ...defaultLawContext,
         lawItems: fetchedLawItems.length > 0 ? fetchedLawItems : defaultLawContext.lawItems,
         lawActionItems: fetchedLawActionItems.length > 0 ? fetchedLawActionItems : defaultLawContext.lawActionItems,
+        requireVerifiedSource: true,
       };
 
-      const rowInputs = snapshotRows.map((row) => ({
-        workProcess: row.workProcess,
-        category: row.category,
-        cause: row.cause,
-        hazardFactor: row.hazardFactor,
-      }));
+      const intentByRow = new Map(semanticIntents.map((intent) => [intent.rowIndex, intent]));
+      const rowInputs = snapshotRows.map((row, rowIndex) => {
+        const intent = intentByRow.get(rowIndex);
+        return {
+          workProcess: [row.workProcess, ...(intent?.equipment ?? [])].filter(Boolean).join(" "),
+          category: row.category,
+          cause: [row.cause, intent?.unsafeCondition].filter(Boolean).join(" "),
+          hazardFactor: [
+            row.hazardFactor,
+            intent?.accidentMechanism,
+            intent?.hazardType,
+            ...(intent?.searchTerms ?? []),
+          ].filter(Boolean).join(" "),
+          controlIntent: intent?.controlIntent ?? row.controlIntent,
+        };
+      });
 
       const firstPassLegalBases = resolveRiskRowsLegalBasis(rowInputs, resolvedLawContext);
       const firstPassRows = snapshotRows.map((row, rowIndex) => ({
@@ -916,6 +984,7 @@ export default function FormEditor() {
         legalBasis: firstPassLegalBases[rowIndex] ?? "",
       }));
       const normalizedFirstPass = enforceUniqueLegalBases(firstPassRows, resolvedLawContext);
+      const candidateOptionsByRow = getRiskRowsLegalBasisCandidateOptions(rowInputs, resolvedLawContext, 5);
 
       const reviewed = await RiskLegalBasisFitService.reviewRows({
         taskName: resolvedTaskName,
@@ -926,30 +995,66 @@ export default function FormEditor() {
           cause: row.cause,
           hazardFactor: row.hazardFactor,
           legalBasis: row.legalBasis,
+          controlIntent: row.controlIntent,
         })),
-        candidateOptionsByRow: getRiskRowsLegalBasisCandidateOptions(rowInputs, resolvedLawContext, 3),
+        candidateOptionsByRow,
       });
       const reviewedByIndex = new Map(reviewed.map((item) => [item.rowIndex, item]));
+      const fallbackRows = reviewed.filter((item) => item.reviewSource === "deterministic_fallback").length;
+      const reviewRequiredRows = reviewed.filter((item) => item.status !== "verified").length;
 
-      const resolvedByIndex = new Map<number, string>();
-      const usedLegalBasisKeys = new Set<string>();
-      normalizedFirstPass.rows.forEach((row, rowIndex) => {
+      const eligibleOptionsByRow = candidateOptionsByRow.map((options, rowIndex) => {
         const reviewedRow = reviewedByIndex.get(rowIndex);
-        const selectedLegalBasis =
-          reviewedRow && isStrictLegalBasis(reviewedRow.recommendedLegalBasis)
-            ? reviewedRow.recommendedLegalBasis
-            : row.legalBasis;
-        if (!isStrictLegalBasis(selectedLegalBasis)) {
-          resolvedByIndex.set(rowIndex, "");
-          return;
+        if (!reviewedRow || reviewedRow.status === "verified") {
+          return options;
         }
-        const dedupKey = legalBasisDedupKey(selectedLegalBasis);
-        if (!dedupKey || usedLegalBasisKeys.has(dedupKey)) {
-          resolvedByIndex.set(rowIndex, "");
-          return;
+        if (reviewedRow.status === "review_required") {
+          return options.filter((option) => option.sourceType === "storage" || option.sourceType === "db");
         }
-        usedLegalBasisKeys.add(dedupKey);
-        resolvedByIndex.set(rowIndex, selectedLegalBasis);
+        return [];
+      });
+      const preferredLegalBases = normalizedFirstPass.rows.map((row, rowIndex) => {
+        const reviewedRow = reviewedByIndex.get(rowIndex);
+        return reviewedRow?.status === "verified" && isStrictLegalBasis(reviewedRow.recommendedLegalBasis)
+          ? reviewedRow.recommendedLegalBasis
+          : row.legalBasis;
+      });
+      const globallyAssigned = assignUniqueLegalBasisOptions(eligibleOptionsByRow, preferredLegalBases);
+      const assignedWithReviewFallback = globallyAssigned.map((legalBasis, rowIndex) => {
+        if (legalBasis) {
+          return legalBasis;
+        }
+        const reviewedRow = reviewedByIndex.get(rowIndex);
+        if (reviewedRow?.status !== "review_required") {
+          return "";
+        }
+        const eligibleOptions = eligibleOptionsByRow[rowIndex] ?? [];
+        return eligibleOptions.find((option) => option.legalBasis === reviewedRow.recommendedLegalBasis)?.legalBasis
+          ?? eligibleOptions[0]?.legalBasis
+          ?? "";
+      });
+      const resolvedByIndex = new Map(assignedWithReviewFallback.map((legalBasis, rowIndex) => [rowIndex, legalBasis]));
+      const reviewDetailsForSnapshot = snapshotRows.map((_, rowIndex): LegalBasisReviewDetail | undefined => {
+        const reviewedRow = reviewedByIndex.get(rowIndex);
+        if (!reviewedRow) {
+          return undefined;
+        }
+
+        const resolvedLegalBasis = resolvedByIndex.get(rowIndex) ?? "";
+        const evidenceMatchesResolvedBasis = resolvedLegalBasis === reviewedRow.recommendedLegalBasis;
+        if (reviewedRow.status === "verified" && !evidenceMatchesResolvedBasis) {
+          return {
+            status: "review_required",
+            reason: "원문을 검증한 후보와 최종 배정된 조문이 일치하지 않습니다.",
+          };
+        }
+
+        return {
+          status: reviewedRow.status,
+          evidenceExcerpt: evidenceMatchesResolvedBasis ? reviewedRow.evidenceExcerpt : undefined,
+          applicabilityReason: evidenceMatchesResolvedBasis ? reviewedRow.applicabilityReason : undefined,
+          reason: reviewedRow.reason,
+        };
       });
 
       let skippedRows = 0;
@@ -975,28 +1080,58 @@ export default function FormEditor() {
         const validationResult = applyRiskRowsValidation(nextRows, {
           rewriteInvalidFields: false,
         });
-        nextReviewRequiredByRow = buildLegalBasisReviewRequiredByRows(validationResult.rows);
+        nextReviewRequiredByRow = buildLegalBasisReviewRequiredByRows(validationResult.rows).map(
+          (reviewRequired, rowIndex) =>
+            reviewRequired || reviewedByIndex.get(rowIndex)?.status === "review_required",
+        );
         return validationResult.rows;
       });
       if (nextReviewRequiredByRow.length > 0) {
         setLegalBasisReviewRequiredByRow(nextReviewRequiredByRow);
       }
+      setLegalBasisReviewDetailsByRow(reviewDetailsForSnapshot);
 
-      toast({
-        title: "법적기준 매칭 완료",
-        description: skippedRows > 0
-          ? `법적기준 ${matchedRows}건을 반영했습니다. 수정된 ${skippedRows}개 행은 반영하지 않았습니다.`
-          : `법적기준 ${matchedRows}건을 반영했습니다.`,
-      });
+      if (!automatic) {
+        const resultNotes = [
+          ...(usedLocalFallback ? ["AI 분석 지연으로 기본 검색 사용"] : []),
+          ...(fallbackRows > 0 ? [`검증 대체 ${fallbackRows}건`] : []),
+          ...(reviewRequiredRows > 0 ? [`수동 검토 ${reviewRequiredRows}건`] : []),
+        ];
+        const fallbackNote = resultNotes.length > 0 ? ` (${resultNotes.join(", ")})` : "";
+        toast({
+          title: "법적기준 매칭 완료",
+          description: skippedRows > 0
+            ? `법적기준 ${matchedRows}건을 반영했습니다. 수정된 ${skippedRows}개 행은 반영하지 않았습니다.${fallbackNote}`
+            : `법적기준 ${matchedRows}건을 반영했습니다.${fallbackNote}`,
+          ...(usedLocalFallback ? {
+            action: React.createElement(ToastAction, {
+              altText: "AI로 재시도",
+              onClick: () => void handleMatchLegalBasisWithAi(),
+            }, "AI로 재시도"),
+          } : {}),
+        });
+      }
+      return { matchedRows, fallbackRows, reviewRequiredRows, failed: false };
     } catch (error) {
       const message = error instanceof Error ? error.message : "법적기준 매칭 중 오류가 발생했습니다.";
       setAnalysisError(message);
       setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(snapshotRows));
-      toast({
-        title: "법적기준 매칭 실패",
-        description: message,
-        variant: "destructive",
-      });
+      setLegalBasisReviewDetailsByRow(snapshotRows.map(() => ({
+        status: "unknown",
+        reason: message,
+      })));
+      if (!automatic) {
+        toast({
+          title: "법적기준 매칭 실패",
+          description: message,
+          variant: "destructive",
+          action: React.createElement(ToastAction, {
+            altText: "재시도",
+            onClick: () => void handleMatchLegalBasisWithAi(),
+          }, "재시도"),
+        });
+      }
+      return { matchedRows: 0, fallbackRows: 0, reviewRequiredRows: snapshotRows.length, failed: true };
     } finally {
       setIsMatchingLegalBasis(false);
     }
@@ -1032,6 +1167,9 @@ export default function FormEditor() {
       : taskName.trim();
     const previousRiskRows = activeFormType === "risk-assessment" ? riskData : null;
     const previousLegalBasisReviewByRow = activeFormType === "risk-assessment" ? legalBasisReviewRequiredByRow : null;
+    const previousLegalBasisReviewDetailsByRow = activeFormType === "risk-assessment"
+      ? legalBasisReviewDetailsByRow
+      : null;
     const previousValidationSummary = activeFormType === "risk-assessment" ? riskValidationSummary : null;
     const previousValidationEvents = activeFormType === "risk-assessment"
       ? [...lastRiskValidationEventsRef.current]
@@ -1060,6 +1198,7 @@ export default function FormEditor() {
         });
         setRiskData(validationResult.rows);
         setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(validationResult.rows));
+        setLegalBasisReviewDetailsByRow([]);
         lastRiskValidationEventsRef.current = mappedResult.validationEvents;
         void RiskValidationAuditService.writeEvents(
           mappedResult.validationEvents,
@@ -1071,25 +1210,47 @@ export default function FormEditor() {
           console.warn("[FormEditor] Failed to write risk validation audit events.", error);
         });
         setAccidentData(null);
+        const legalMatchResult = await handleMatchLegalBasisWithAi({
+          assessment: nextAssessment,
+          rows: validationResult.rows,
+          automatic: true,
+        });
+        toast({
+          title: legalMatchResult.failed ? "AI 서식 생성 완료" : "AI 분석 및 법령 매칭 완료",
+          description: legalMatchResult.failed
+            ? `${formTitle} 초안은 생성했지만 법적기준 자동 매칭은 실패했습니다.`
+            : `${formTitle} 초안과 법적기준 ${legalMatchResult.matchedRows}건을 생성했습니다.${
+              legalMatchResult.fallbackRows > 0 ? ` 검증 대체 ${legalMatchResult.fallbackRows}건.` : ""
+            }${
+              legalMatchResult.reviewRequiredRows > 0 ? ` 수동 검토 ${legalMatchResult.reviewRequiredRows}건.` : ""
+            }`,
+          ...(legalMatchResult.failed ? { variant: "destructive" as const } : {}),
+        });
       } else {
         setTaskName(resolvedTaskName);
         setAccidentData(FormService.mapAssessmentToAccidentReport(nextAssessment, companyProfile));
         setRiskData([]);
         setLegalBasisReviewRequiredByRow([]);
+        setLegalBasisReviewDetailsByRow([]);
         setRiskValidationSummary(null);
         lastRiskValidationEventsRef.current = [];
       }
 
-      toast({
-        title: "AI 분석 완료",
-        description: `${formTitle} 자동생성 초안을 생성했습니다.`,
-      });
+      if (activeFormType !== "risk-assessment") {
+        toast({
+          title: "AI 분석 완료",
+          description: `${formTitle} 자동생성 초안을 생성했습니다.`,
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
       if (activeFormType === "risk-assessment" && previousRiskRows) {
         setRiskData(previousRiskRows);
         if (previousLegalBasisReviewByRow) {
           setLegalBasisReviewRequiredByRow(previousLegalBasisReviewByRow);
+        }
+        if (previousLegalBasisReviewDetailsByRow) {
+          setLegalBasisReviewDetailsByRow(previousLegalBasisReviewDetailsByRow);
         }
         setRiskValidationSummary(previousValidationSummary);
         lastRiskValidationEventsRef.current = previousValidationEvents;
@@ -1408,6 +1569,7 @@ export default function FormEditor() {
                 isMatchingLegalBasis={isMatchingLegalBasis}
                 disableMatchLegalBasis={!canMatchLegalBasisWithAi}
                 legalBasisReviewRequiredByRow={legalBasisReviewRequiredByRow}
+                legalBasisReviewDetailsByRow={legalBasisReviewDetailsByRow}
                 readOnly={isHistoryView || isHistoryLoading}
               />
             )}

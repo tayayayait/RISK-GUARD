@@ -25,6 +25,7 @@ import {
 import { formatOpenApiServiceError, parseSmartSearchPayload } from "./smart-search-parser.ts";
 
 import { HAZARD_ARTICLE_MAP } from "./hazard-article-map.ts";
+import { getRiskControlIntentSearchTerms } from "./risk-control-intent.ts";
 
 const ARTICLE_TITLE_FALLBACKS = new Map<string, string>();
 for (const entries of Object.values(HAZARD_ARTICLE_MAP)) {
@@ -40,11 +41,22 @@ interface WorkProfile {
   hazards: Array<{ name: string; type: string; weight?: number }>;
 }
 
+interface SemanticLegalIntent {
+  rowIndex: number;
+  hazardType: string;
+  accidentMechanism: string;
+  unsafeCondition: string;
+  controlIntent?: string;
+  equipment: string[];
+  searchTerms: string[];
+}
+
 export interface LawGuideRequestBody {
   taskName: string;
   profile: WorkProfile;
   taskDescription?: string;
   analysisScenario?: string;
+  semanticIntents?: SemanticLegalIntent[];
 }
 
 export type LawGuideMode = "assessment" | "form";
@@ -179,17 +191,17 @@ const ACTION_STAGE_MAX_ITEMS = 3;
 const LAW_RANK_THRESHOLD = 55;
 const LAW_STRICT_FINAL_THRESHOLD = 60;
 const LAW_ADAPTIVE_MIN_RESULTS = 6;
-const LAW_ADAPTIVE_THRESHOLDS = [LAW_STRICT_FINAL_THRESHOLD, LAW_RANK_THRESHOLD, 50, 45, 40, 35];
-const LAW_RELAXED_FALLBACK_THRESHOLDS = [50, 45, 40, 35, 30];
+const LAW_ADAPTIVE_THRESHOLDS = [LAW_STRICT_FINAL_THRESHOLD, LAW_RANK_THRESHOLD, 50, 45, 40, 35, 30, 25, 20, 15, 10];
+const LAW_RELAXED_FALLBACK_THRESHOLDS = [50, 45, 40, 35, 30, 25, 20, 15, 10];
 const GUIDE_RANK_THRESHOLD = 55;
 const GUIDE_MEDIA_ADAPTIVE_THRESHOLDS = [GUIDE_RANK_THRESHOLD, 50, 45];
 const API_FETCH_TIMEOUT_MS = 8000;
-const API_FETCH_BUDGET_MS = 70000;
+const API_FETCH_BUDGET_MS = 45000;
 const API_FETCH_RETRY_ATTEMPTS = 2;
 const API_FETCH_RETRY_BACKOFF_MS = 180;
-const LAW_API_ROWS_PER_REQUEST = 60;
-const GUIDE_MEDIA_ROWS_PER_REQUEST = 20;
-const EVIDENCE_API_ONLY_MAX_SEARCH_VALUES = 10;
+const LAW_API_ROWS_PER_REQUEST = 30;
+const GUIDE_MEDIA_ROWS_PER_REQUEST = 10;
+const EVIDENCE_API_ONLY_MAX_SEARCH_VALUES = 6;
 const API_ZERO_RESULT_FALLBACK_LIMIT = 3;
 const ARTICLE_HEADING_PATTERN = /(제\s*\d+\s*조(?:의\s*\d+)?)\s*\(([^)]+)\)/;
 const FOOTER_PATTERN = /^(?:(?:산업안전보건기준에\s*관한\s*규칙|산업안전보건기준에관한규칙)\s*(?:\[시행[^\]]+\])?\s*\d*)$/;
@@ -197,7 +209,6 @@ const ACTION_HINT_PATTERN = /(필요한\s*조치|적절한\s*조치|조치(?:하
 const STORAGE_SOURCE_PATTERN = /\.(md|pdf|txt)$/i;
 const RULES_STORAGE_FILENAME_PATTERN = /(?:^|\/)kr-industrial-safety-and-health-standards-rules(?:\.[^.]+)?$/i;
 const RULES_STORAGE_FALLBACK_PATHS = [
-  "kr-industrial-safety-and-health-standards-rules.pdf",
   "kr-industrial-safety-and-health-standards-rules.md",
 ] as const;
 const LAW_ONLY_STANDARDS_RULES = (Deno.env.get("LAW_ONLY_STANDARDS_RULES") ?? "false").toLowerCase() === "true";
@@ -489,7 +500,11 @@ function normalizeKeywords(raw: string) {
 function buildSearchValues(
   taskName: string,
   profile: WorkProfile,
-  options?: { taskDescription?: string; analysisScenario?: string },
+  options?: {
+    taskDescription?: string;
+    analysisScenario?: string;
+    semanticIntents?: SemanticLegalIntent[];
+  },
 ) {
   const sortedHazards = Array.isArray(profile.hazards)
     ? profile.hazards
@@ -506,7 +521,23 @@ function buildSearchValues(
     .filter(Boolean)
     .slice(0, 3);
 
+  const semanticSeeds = (options?.semanticIntents ?? []).flatMap((intent) => {
+    const controlTerms = intent.controlIntent
+      ? getRiskControlIntentSearchTerms(intent.controlIntent)
+      : [];
+    const primaryAnchor = sanitizeText(intent.equipment[0] || intent.hazardType);
+    return [
+      ...controlTerms.map((term) => sanitizeText(`${primaryAnchor} ${term}`)),
+      ...controlTerms,
+      ...intent.searchTerms,
+      intent.accidentMechanism,
+      intent.unsafeCondition,
+      intent.hazardType,
+      ...intent.equipment,
+    ];
+  }).map((value) => sanitizeText(value)).filter(Boolean);
   const exactSeeds = [
+    ...semanticSeeds,
     ...topHazardNames,
     ...topHazardTypes,
     sanitizeText(taskName),
@@ -565,7 +596,29 @@ function buildSearchValues(
     ),
   );
 
-  return uniqueStrings([...exactSeeds, ...contextPairSeeds, ...tokenSeeds, ...contextTokenSeeds]).slice(0, 16);
+  return uniqueStrings([...exactSeeds, ...contextPairSeeds, ...tokenSeeds, ...contextTokenSeeds]).slice(0, 24);
+}
+
+function enrichProfileWithSemanticIntents(
+  profile: WorkProfile,
+  intents: SemanticLegalIntent[] = [],
+): WorkProfile {
+  if (intents.length === 0) {
+    return profile;
+  }
+
+  const semanticEquipment = intents.flatMap((intent) => intent.equipment).map((item) => sanitizeText(item));
+  const semanticHazards = intents.map((intent) => ({
+    name: sanitizeText(intent.accidentMechanism),
+    type: sanitizeText(intent.hazardType),
+    weight: 100,
+  })).filter((hazard) => hazard.name && hazard.type);
+
+  return {
+    ...profile,
+    equipment: uniqueStrings([...(profile.equipment ?? []), ...semanticEquipment].filter(Boolean)),
+    hazards: [...semanticHazards, ...(profile.hazards ?? [])],
+  };
 }
 
 function uniqueStrings(values: string[]) {
@@ -1903,25 +1956,20 @@ async function rankWithAdaptiveThresholds(
     ? Math.max(1, Math.floor(minimumResults))
     : 1;
 
-  let appliedThreshold = thresholdPlan[0];
-  let bestRanked: ScoredCandidate[] = [];
-  let bestThreshold = appliedThreshold;
+  const lowestThreshold = Math.min(...thresholdPlan);
+  const rankedAtLowestThreshold = await rankCandidatesHybrid(context, candidates, {
+    ...options,
+    threshold: lowestThreshold,
+  });
+
   for (const threshold of thresholdPlan) {
-    appliedThreshold = threshold;
-    const ranked = await rankCandidatesHybrid(context, candidates, {
-      ...options,
-      threshold,
-    });
-    if (ranked.length > bestRanked.length) {
-      bestRanked = ranked;
-      bestThreshold = threshold;
-    }
+    const ranked = rankedAtLowestThreshold.filter((candidate) => candidate.finalScore >= threshold);
     if (ranked.length >= normalizedMinimumResults) {
-      return { ranked, appliedThreshold };
+      return { ranked, appliedThreshold: threshold };
     }
   }
 
-  return { ranked: bestRanked, appliedThreshold: bestThreshold };
+  return { ranked: rankedAtLowestThreshold, appliedThreshold: lowestThreshold };
 }
 
 function deriveTrackEmptyReason(rawCount: number, rankedCount: number): TrackEmptyReason | undefined {
@@ -2482,16 +2530,18 @@ export async function buildLawGuidesPayload(
   const isApiOnlyLawSource = lawSourcePolicy === "api_only";
   const isApiOnlyEvidenceMode = isEvidenceOnly && isApiOnlyLawSource;
   const isStorageDbOnlyLawSource = lawSourcePolicy === "storage_db_only";
-  const context = toMatchContext(sanitizeText(body.taskName), body.profile);
-  const searchValues = buildSearchValues(context.taskName, body.profile, {
+  const matchingProfile = enrichProfileWithSemanticIntents(body.profile, body.semanticIntents);
+  const context = toMatchContext(sanitizeText(body.taskName), matchingProfile);
+  const searchValues = buildSearchValues(context.taskName, matchingProfile, {
     taskDescription: body.taskDescription,
     analysisScenario: body.analysisScenario,
+    semanticIntents: body.semanticIntents,
   });
   const effectiveSearchValues = isApiOnlyEvidenceMode
     ? searchValues.slice(0, EVIDENCE_API_ONLY_MAX_SEARCH_VALUES)
     : searchValues;
   const apiFallbackSearchValues = isApiOnlyEvidenceMode
-    ? buildApiFallbackSearchValues(body.profile, effectiveSearchValues)
+    ? buildApiFallbackSearchValues(matchingProfile, effectiveSearchValues)
     : [];
   const serviceKey = resolveServiceKey();
 
@@ -2520,7 +2570,7 @@ export async function buildLawGuidesPayload(
   let dbFetchedRowCount = 0;
   if (!isApiOnlyLawSource) {
     try {
-      const dbResult = await fetchDbCandidates(body.profile);
+      const dbResult = await fetchDbCandidates(matchingProfile);
       dbCandidates = dbResult.candidates;
       dbFetchedRowCount = dbResult.fetchedRowCount;
     } catch (error) {
@@ -2533,7 +2583,7 @@ export async function buildLawGuidesPayload(
   let storageDiagnostics = createStorageCandidateDiagnostics();
   if (!isApiOnlyLawSource) {
     try {
-      const storageResult = await fetchStorageCandidates(body.profile);
+      const storageResult = await fetchStorageCandidates(matchingProfile);
       storageCandidates = storageResult.candidates;
       storageDiagnostics = storageResult.diagnostics;
     } catch (error) {
@@ -2556,7 +2606,7 @@ export async function buildLawGuidesPayload(
   const rankBaseOptions = {
     maxResults: LAW_EVIDENCE_LIMIT,
     semanticTopK: 20,
-    semanticTimeoutMs: 1800,
+    semanticTimeoutMs: 5000,
     semanticEnabled: !isApiOnlyEvidenceMode,
     csvEnhancementEnabled: true,
     hazardTypeFilter: "required" as const,
@@ -2678,10 +2728,10 @@ export async function buildLawGuidesPayload(
         taskDescription: sanitizeText(body.taskDescription ?? "") || undefined,
         analysisScenario: sanitizeText(body.analysisScenario ?? "") || undefined,
         profile: {
-          industry: sanitizeText(body.profile.industry ?? ""),
-          workLocation: sanitizeText(body.profile.workLocation ?? ""),
-          equipment: (body.profile.equipment ?? []).map((item) => sanitizeText(item)).filter(Boolean),
-          hazards: (body.profile.hazards ?? []).map((hazard) => ({
+          industry: sanitizeText(matchingProfile.industry ?? ""),
+          workLocation: sanitizeText(matchingProfile.workLocation ?? ""),
+          equipment: (matchingProfile.equipment ?? []).map((item) => sanitizeText(item)).filter(Boolean),
+          hazards: (matchingProfile.hazards ?? []).map((hazard) => ({
             name: sanitizeText(hazard.name ?? ""),
             type: sanitizeText(hazard.type ?? "") || undefined,
             weight: hazard.weight ?? 0,
@@ -2705,10 +2755,10 @@ export async function buildLawGuidesPayload(
         taskDescription: sanitizeText(body.taskDescription ?? "") || undefined,
         analysisScenario: sanitizeText(body.analysisScenario ?? "") || undefined,
         profile: {
-          industry: sanitizeText(body.profile.industry ?? ""),
-          workLocation: sanitizeText(body.profile.workLocation ?? ""),
-          equipment: (body.profile.equipment ?? []).map((item) => sanitizeText(item)).filter(Boolean),
-          hazards: (body.profile.hazards ?? []).map((hazard) => ({
+          industry: sanitizeText(matchingProfile.industry ?? ""),
+          workLocation: sanitizeText(matchingProfile.workLocation ?? ""),
+          equipment: (matchingProfile.equipment ?? []).map((item) => sanitizeText(item)).filter(Boolean),
+          hazards: (matchingProfile.hazards ?? []).map((hazard) => ({
             name: sanitizeText(hazard.name ?? ""),
             type: sanitizeText(hazard.type ?? "") || undefined,
             weight: hazard.weight ?? 0,

@@ -6,6 +6,7 @@
   MaterialFetchResult,
   MaterialItem,
   MaterialSearchFilters,
+  RiskLegalSemanticIntent,
   WorkProfile,
 } from "@/types/assessment";
 import { invokeBackend } from "@/services/edgeFunctionClient";
@@ -16,11 +17,13 @@ interface KoshaProxyPayload {
   filters?: MaterialSearchFilters;
   taskDescription?: string;
   analysisScenario?: string;
+  semanticIntents?: RiskLegalSemanticIntent[];
 }
 
 export interface LawSearchOptions {
   taskDescription?: string;
   analysisScenario?: string;
+  semanticIntents?: RiskLegalSemanticIntent[];
 }
 
 export type LawGuidesRoute =
@@ -45,6 +48,7 @@ interface LawGuideResponse {
 }
 
 const LAW_GUIDE_TIMEOUT_MS = 120000;
+const CASE_FETCH_TIMEOUT_MS = 120000;
 
 function parseErrorCode(error: unknown, fallback = "UNKNOWN_ERROR") {
   if (error && typeof error === "object") {
@@ -67,8 +71,8 @@ function parseErrorCode(error: unknown, fallback = "UNKNOWN_ERROR") {
 
 async function fetchProxy<T>(path: string, payload: KoshaProxyPayload): Promise<T | null> {
   const functionMap: Record<string, { name: string; timeoutMs?: number }> = {
-    "/kosha/disaster-cases": { name: "kosha-disaster-cases" },
-    "/kosha/fatality-cases": { name: "kosha-fatality-cases" },
+    "/kosha/disaster-cases": { name: "kosha-disaster-cases", timeoutMs: CASE_FETCH_TIMEOUT_MS },
+    "/kosha/fatality-cases": { name: "kosha-fatality-cases", timeoutMs: CASE_FETCH_TIMEOUT_MS },
     "/kosha/law-evidence": { name: "kosha-law-evidence", timeoutMs: LAW_GUIDE_TIMEOUT_MS },
     "/kosha/law-guides": { name: "kosha-law-guides", timeoutMs: LAW_GUIDE_TIMEOUT_MS },
     "/kosha/law-guides-form": { name: "kosha-law-guides-form", timeoutMs: LAW_GUIDE_TIMEOUT_MS },
@@ -185,6 +189,7 @@ function createLawSearchPayload(taskName: string, profile: WorkProfile, options?
     profile,
     ...(options?.taskDescription?.trim() ? { taskDescription: options.taskDescription.trim() } : {}),
     ...(options?.analysisScenario?.trim() ? { analysisScenario: options.analysisScenario.trim() } : {}),
+    ...(options?.semanticIntents?.length ? { semanticIntents: options.semanticIntents } : {}),
   };
 }
 

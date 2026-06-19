@@ -251,6 +251,28 @@ describe("KoshaService.searchLaws", () => {
     );
   });
 
+  it("allows slow disaster and fatality upstream responses to complete", async () => {
+    vi.mocked(invokeBackend).mockResolvedValue([]);
+
+    await KoshaService.searchDisasterCases("tank welding", profile);
+    await KoshaService.queryFatalities("tank welding", profile);
+
+    expect(invokeBackend).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        supabaseFunction: "kosha-disaster-cases",
+        timeoutMs: 120000,
+      }),
+    );
+    expect(invokeBackend).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        supabaseFunction: "kosha-fatality-cases",
+        timeoutMs: 120000,
+      }),
+    );
+  });
+
   it("keeps storage source fields as-is", async () => {
     vi.mocked(invokeBackend).mockResolvedValue({
       lawItems: [

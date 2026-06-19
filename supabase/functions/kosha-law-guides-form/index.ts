@@ -28,6 +28,6 @@ serve(async (req) => {
       return errorResponse(400, "VALIDATION_ERROR", error.message.replace("VALIDATION_ERROR:", ""));
     }
 
-    return errorResponse(500, "INTERNAL_ERROR", "Unexpected error during law guide lookup.");
+    return errorResponse(500, "INTERNAL_ERROR", error instanceof Error ? (error.stack || error.message) : String(error));
   }
 });

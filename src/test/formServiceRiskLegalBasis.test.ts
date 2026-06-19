@@ -243,6 +243,9 @@ describe("FormService risk legal basis mapping", () => {
             sourceType: "storage",
             legalBasis: "산업안전보건기준에 관한 규칙 제301조(전기기계·기구 등의 충전부 방호)",
             articleNumber: "제301조",
+            articleTitle: "전기기계·기구 등의 충전부 방호",
+            clausePreview: "충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
+            fullContent: "사업주는 충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
           },
           {
             id: "law-storage-56",
@@ -414,6 +417,9 @@ describe("FormService risk legal basis mapping", () => {
             sourceType: "storage",
             legalBasis: "산업안전보건기준에 관한 규칙 제301조(전기기계·기구 등의 충전부 방호)",
             articleNumber: "제301조",
+            articleTitle: "전기기계·기구 등의 충전부 방호",
+            clausePreview: "충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
+            fullContent: "사업주는 충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
           },
         ],
         lawActionItems: [],
@@ -423,6 +429,77 @@ describe("FormService risk legal basis mapping", () => {
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].length).toBeGreaterThan(0);
-    expect(candidates[0][0]?.legalBasis).toMatch(/^산업안전보건기준에 관한 규칙 제\d+조\(.+\)$/);
+    expect(candidates[0][0]).toEqual(expect.objectContaining({
+      legalBasis: expect.stringMatching(/^산업안전보건기준에 관한 규칙 제\d+조\(.+\)$/),
+      articleTitle: "전기기계·기구 등의 충전부 방호",
+      clausePreview: "충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
+      originalText: "사업주는 충전부에는 감전을 방지하기 위한 방호조치를 해야 한다.",
+    }));
+  });
+
+  it("uses verified public API law candidates in form matching", () => {
+    const candidates = getRiskRowsLegalBasisCandidateOptions(
+      [
+        {
+          workProcess: "절단기 가공",
+          category: "기계적 요인",
+          cause: "절단기 방호덮개가 열린 상태로 가공",
+          hazardFactor: "회전 절단날 접촉으로 절단 위험 증가",
+        },
+      ],
+      {
+        workTokens: ["가공", "절단"],
+        equipmentTokens: ["절단기"],
+        taskHazardTypes: ["절단"],
+        taskContextTokens: ["방호덮개", "회전날"],
+        lawItems: [
+          {
+            id: "law-api-87",
+            type: "law",
+            sourceBadge: "법령",
+            title: "제87조(원동기·회전축 등의 위험 방지)",
+            relevanceScore: 98,
+            summaryBullets: ["회전 절단날 접촉 방지 조치"],
+            keywords: ["절단기", "회전날", "방호덮개", "절단"],
+            sourceType: "api",
+            legalBasis: "산업안전보건기준에 관한 규칙 제87조(원동기·회전축 등의 위험 방지)",
+            articleNumber: "제87조",
+            articleTitle: "원동기·회전축 등의 위험 방지",
+            clausePreview: "회전축 등 근로자에게 위험을 미칠 우려가 있는 부분에는 덮개를 설치해야 한다.",
+          },
+        ],
+        lawActionItems: [],
+      },
+      3,
+    );
+
+    expect(candidates[0]?.[0]).toEqual(expect.objectContaining({
+      sourceType: "api",
+      legalBasis: "산업안전보건기준에 관한 규칙 제87조(원동기·회전축 등의 위험 방지)",
+    }));
+  });
+
+  it("does not use static fallback articles when verified source is required", () => {
+    const legalBases = resolveRiskRowsLegalBasis(
+      [
+        {
+          workProcess: "비계 작업",
+          category: "작업특성 요인",
+          cause: "작업발판 고정 상태 미확인",
+          hazardFactor: "비계 작업발판 이탈로 추락 위험 증가",
+        },
+      ],
+      {
+        workTokens: ["비계"],
+        equipmentTokens: ["작업발판"],
+        taskHazardTypes: ["추락"],
+        taskContextTokens: ["고정", "이탈"],
+        lawItems: [],
+        lawActionItems: [],
+        requireVerifiedSource: true,
+      },
+    );
+
+    expect(legalBases).toEqual([""]);
   });
 });

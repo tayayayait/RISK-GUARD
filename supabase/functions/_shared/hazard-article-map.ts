@@ -70,13 +70,15 @@ export const HAZARD_ARTICLE_MAP: Record<string, ArticleEntry[]> = {
     { article: "제198조", title: "화물의 낙하·비래 위험의 방지" },
   ],
   "차량/이동장비 충돌": [
+    { article: "제39조", title: "작업지휘자의 지정" },
+    { article: "제40조", title: "신호" },
     { article: "제171조", title: "전도 등의 방지" },
     { article: "제172조", title: "접촉의 방지" },
-    { article: "제179조", title: "하역작업 시의 조치" },
-    { article: "제196조", title: "차량계 화물운반기계등에 대한 조치" },
-    { article: "제197조", title: "전도 등의 방지" },
-    { article: "제198조", title: "속도의 제한" },
-    { article: "제199조", title: "전조등 등의 설치" },
+    { article: "제179조", title: "전조등 등의 설치" },
+    { article: "제184조", title: "제동장치 등" },
+    { article: "제197조", title: "전조등의 설치" },
+    { article: "제199조", title: "전도 등의 방지" },
+    { article: "제200조", title: "접촉 방지" },
   ],
   "화학노출": [
     { article: "제420조", title: "정의" }, // 관리대상 유해물질 등 정의

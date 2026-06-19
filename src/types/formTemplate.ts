@@ -1,3 +1,5 @@
+import type { RiskControlIntent } from "@/types/riskControlIntent";
+
 export type RiskValidationStatus = "ok" | "review_required";
 
 export type RiskValidationField =
@@ -48,6 +50,7 @@ export interface RiskAssessmentRow {
   reviewReasonCodes?: string[];
   expectedHazardType?: string;
   detectedHazardType?: string;
+  controlIntent?: RiskControlIntent;
 }
 
 export interface AccidentBusinessInfo {

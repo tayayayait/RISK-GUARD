@@ -179,7 +179,7 @@ describe("EvidenceBoard law/guide/media tabs", () => {
     });
   });
 
-  it("법령 탭에서 출처 집계를 표시한다", () => {
+  it("Guide 탭에서 Guide/미디어 전용 출처 집계를 표시한다", () => {
     const context = buildContext();
     vi.mocked(useAssessment).mockReturnValue(context);
     vi.mocked(useOptionalAssessment).mockReturnValue(context);
@@ -190,24 +190,19 @@ describe("EvidenceBoard law/guide/media tabs", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "법령" }));
+    fireEvent.click(screen.getByRole("button", { name: "KOSHA Guide" }));
 
     expect(screen.queryByText("법령 실행지침")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /산업안전보건법.*\(1\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /산업안전보건법 시행령.*\(0\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /산업안전보건기준에 관한 규칙.*\(1\)/ })).toBeInTheDocument();
-    expect(screen.getByText(/법령 범위: 스마트검색 1~4/)).toBeInTheDocument();
-    expect(screen.getByText(/트랙 건수: 법령 2건 · Guide 1건 · 미디어 1건/)).toBeInTheDocument();
-    expect(screen.getByText(/출처 집계\(법령\): API 1/)).toBeInTheDocument();
-    expect(screen.getByText(/법령\/Guide\/미디어\(집계\): 완료/)).toBeInTheDocument();
-    expect(screen.getByText(/법령 트랙: 완료/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "법령" })).not.toBeInTheDocument();
+    expect(screen.getByText(/트랙 건수: Guide 1건 · 미디어 1건/)).toBeInTheDocument();
+    expect(screen.getByText(/출처 집계\(Guide\): API 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Guide\/미디어\(집계\): 완료/)).toBeInTheDocument();
     expect(screen.getByText(/Guide 트랙: 완료/)).toBeInTheDocument();
     expect(screen.getByText(/미디어 트랙: 완료/)).toBeInTheDocument();
-    expect(screen.getByText(/AI 관련성 점수: 87/)).toBeInTheDocument();
-    expect(screen.getByText(/AI 관련성 근거: 작업 위치와 폭발 위험 맥락이 조문 내용과 직접 일치합니다./)).toBeInTheDocument();
+    expect(screen.getByText("밀폐공간 작업 기술지침")).toBeInTheDocument();
   });
 
-  it("법령 하위 탭 전환 시 카테고리별 결과를 필터링한다", () => {
+  it("법령 항목은 Guide/미디어 전용 근거 화면에 노출하지 않는다", () => {
     const context = buildContext();
     vi.mocked(useAssessment).mockReturnValue(context);
     vi.mocked(useOptionalAssessment).mockReturnValue(context);
@@ -218,15 +213,10 @@ describe("EvidenceBoard law/guide/media tabs", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "법령" }));
+    fireEvent.click(screen.getByRole("button", { name: "KOSHA Guide" }));
 
-    expect(screen.getByText("산업안전보건법 제31조")).toBeInTheDocument();
-    expect(screen.queryByText("산업안전보건기준에 관한 규칙 제20조")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /산업안전보건기준에 관한 규칙.*\(1\)/ }));
-
-    expect(screen.getByText("산업안전보건기준에 관한 규칙 제20조")).toBeInTheDocument();
     expect(screen.queryByText("산업안전보건법 제31조")).not.toBeInTheDocument();
+    expect(screen.queryByText("산업안전보건기준에 관한 규칙 제20조")).not.toBeInTheDocument();
   });
 
   it("Guide 탭에서 empty reason을 표시한다", () => {

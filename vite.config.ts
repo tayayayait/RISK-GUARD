@@ -30,8 +30,8 @@ export default defineConfig(() => ({
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
   optimizeDeps: {
-    // Avoid late discovery re-optimization for Checkbox that can trigger 504 outdated dep responses.
-    include: ["@radix-ui/react-checkbox"],
+    // Pre-bundle dependencies reached through lazy routes to avoid 504 outdated dep responses.
+    include: ["@radix-ui/react-checkbox", "@google/generative-ai"],
     // Refresh optimized cache at dev startup to prevent stale browserHash mismatches.
     force: true,
   },

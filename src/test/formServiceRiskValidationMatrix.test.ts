@@ -189,10 +189,8 @@ describe("risk validation matrix", () => {
         reviewRequiredObserved = true;
         expect(validated.validationStatus).toBe("review_required");
         expect(validated.reviewRequiredFields?.length ?? 0).toBeGreaterThan(0);
-        expect(
-          validated.currentMeasure.trim().length === 0
-          || validated.reductionMeasure.trim().length === 0,
-        ).toBe(true);
+        expect(validated.currentMeasure.trim().length).toBeGreaterThan(0);
+        expect(validated.reductionMeasure.trim().length).toBeGreaterThan(0);
       }
 
       const rewrittenEvents = result.validationEvents.filter((event) =>

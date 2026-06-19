@@ -111,37 +111,29 @@ function expandTokens(values: string[]) {
 }
 
 function levenshteinDistance(a: string, b: string) {
-  if (a === b) {
-    return 0;
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  let v0 = new Int32Array(b.length + 1);
+  let v1 = new Int32Array(b.length + 1);
+
+  for (let i = 0; i <= b.length; i++) {
+    v0[i] = i;
   }
 
-  if (a.length === 0) {
-    return b.length;
-  }
-  if (b.length === 0) {
-    return a.length;
-  }
-
-  const matrix = Array.from({ length: a.length + 1 }, () => Array<number>(b.length + 1).fill(0));
-  for (let i = 0; i <= a.length; i += 1) {
-    matrix[i][0] = i;
-  }
-  for (let j = 0; j <= b.length; j += 1) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= a.length; i += 1) {
-    for (let j = 1; j <= b.length; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost,
-      );
+  for (let i = 0; i < a.length; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < b.length; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) {
+      v0[j] = v1[j];
     }
   }
 
-  return matrix[a.length][b.length];
+  return v0[b.length];
 }
 
 function isApproximateMatch(term: string, candidate: string) {

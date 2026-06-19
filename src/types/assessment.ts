@@ -1,5 +1,7 @@
 ﻿import { STANDARD_HAZARD_TYPES, normalizeHazardType } from "../../supabase/functions/_shared/hazard-taxonomy.ts";
 
+import type { RiskControlIntent } from "@/types/riskControlIntent";
+
 export type AssessmentStep =
   | "input"
   | "profile_review"
@@ -33,6 +35,16 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export type LawActionStage = "immediate" | "same_day" | "pre_resume" | "improvement";
 export type LawFitStatus = "verified" | "review_required" | "unknown";
 
+export interface RiskLegalSemanticIntent {
+  rowIndex: number;
+  hazardType: string;
+  accidentMechanism: string;
+  unsafeCondition: string;
+  controlIntent?: RiskControlIntent;
+  equipment: string[];
+  searchTerms: string[];
+}
+
 export interface HazardItem {
   id: string;
   name: string;
@@ -40,6 +52,7 @@ export interface HazardItem {
   weight: number;
   confidence: ConfidenceLevel;
   reason: string;
+  controlIntent?: RiskControlIntent;
 }
 
 export interface ImmediateAction {

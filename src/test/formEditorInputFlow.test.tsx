@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import FormEditor from "@/pages/FormEditor";
 import { analyzeTaskToAssessment } from "@/services/assessmentAnalysisService";
 import { FormLawService } from "@/services/formLawService";
+import { RiskLegalBasisFitService } from "@/services/riskLegalBasisFitService";
 
 vi.mock("@/services/assessmentAnalysisService", () => ({
   analyzeTaskToAssessment: vi.fn(),
@@ -20,6 +21,22 @@ vi.mock("@/services/formLawService", () => ({
       lawActionItems: [],
       status: "empty",
     })),
+  },
+}));
+
+vi.mock("@/services/riskLegalBasisFitService", () => ({
+  RiskLegalBasisFitService: {
+    analyzeRows: vi.fn(async (input: { rows: Array<{ cause: string; hazardFactor: string }> }) => (
+      input.rows.map((row, rowIndex) => ({
+        rowIndex,
+        hazardType: "추락",
+        accidentMechanism: `${row.cause} ${row.hazardFactor}`.trim() || "비계 작업발판 고정 불량으로 인한 추락",
+        unsafeCondition: row.cause || "작업발판 고정 상태 미확인",
+        equipment: ["비계", "작업발판"],
+        searchTerms: ["비계 작업발판", "추락 방지", "작업발판 고정"],
+      }))
+    )),
+    reviewRows: vi.fn(async () => []),
   },
 }));
 
@@ -100,7 +117,21 @@ describe("FormEditor input automation flow", () => {
     await waitFor(() => {
       expect(analyzeTaskToAssessment).toHaveBeenCalledTimes(1);
     });
-    expect(FormLawService.searchLaws).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(RiskLegalBasisFitService.analyzeRows).toHaveBeenCalledTimes(1);
+      expect(FormLawService.searchLaws).toHaveBeenCalledTimes(1);
+    });
+
+    const lawOptions = vi.mocked(FormLawService.searchLaws).mock.calls[0]?.[2];
+    expect(lawOptions?.semanticIntents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rowIndex: 0,
+          hazardType: "추락",
+          searchTerms: expect.arrayContaining(["비계 작업발판", "추락 방지"]),
+        }),
+      ]),
+    );
 
     const payload = vi.mocked(analyzeTaskToAssessment).mock.calls[0][0];
     expect(payload.taskName).toBe(inputTaskName);

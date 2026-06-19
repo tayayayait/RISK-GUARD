@@ -159,7 +159,8 @@ describe("FormService narrative quality for risk rows", () => {
     });
 
     const anchorPattern = /(metal|cutter|steel|blade|cutting|isolation|prolonged|절단|안전조치|설비)/i;
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.controlIntent)).size).toBe(rows.length);
     for (const row of rows) {
       expect(anchorPattern.test(`${row.cause} ${row.hazardFactor}`)).toBe(true);
     }

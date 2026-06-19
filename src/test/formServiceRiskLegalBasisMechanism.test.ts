@@ -1,7 +1,85 @@
 import { describe, expect, it } from "vitest";
 import { resolveRiskRowsLegalBasis } from "@/services/formService";
+import * as formService from "@/services/formService";
 
 describe("FormService legal basis mechanism policy", () => {
+  it("matches different vehicle articles by row control intent", () => {
+    const commonRow = {
+      workProcess: "지게차 자재 운반",
+      category: "기계적 요인",
+      cause: "지게차 운반 중 작업자와 충돌 사고가 발생할 수 있음",
+      hazardFactor: "지게차와 작업자 충돌 위험 증가",
+    };
+    const rows = [
+      { ...commonRow, controlIntent: "access_control" as const },
+      { ...commonRow, controlIntent: "supervision" as const },
+      { ...commonRow, controlIntent: "traffic_operation" as const },
+    ];
+    const makeLaw = (
+      articleNumber: string,
+      title: string,
+      relevanceScore: number,
+      keywords: string[],
+    ) => ({
+      id: `law-${articleNumber}`,
+      type: "law" as const,
+      sourceBadge: "법령",
+      title: `${articleNumber}(${title})`,
+      relevanceScore,
+      summaryBullets: [`지게차 운반 중 작업자 충돌 방지를 위한 ${keywords.join(" ")}`],
+      keywords: ["지게차", "차량", "충돌", ...keywords],
+      sourceType: "storage" as const,
+      legalBasis: `산업안전보건기준에 관한 규칙 ${articleNumber}(${title})`,
+      articleNumber,
+    });
+
+    const legalBases = resolveRiskRowsLegalBasis(rows, {
+      workTokens: ["지게차", "자재", "운반"],
+      equipmentTokens: ["지게차", "차량"],
+      taskHazardTypes: ["차량/이동장비 충돌"],
+      lawItems: [
+        makeLaw("제179조", "전조등 등의 설치", 99, ["제한속도", "후진 경보"]),
+        makeLaw("제172조", "접촉의 방지", 98, ["출입 통제", "동선 분리"]),
+        makeLaw("제39조", "신호", 97, ["유도자 배치", "신호수 배치"]),
+      ],
+      lawActionItems: [],
+    });
+
+    expect(legalBases[0]).toContain("제172조");
+    expect(legalBases[1]).toContain("제39조");
+    expect(legalBases[2]).toContain("제179조");
+  });
+
+  it("globally assigns unique alternatives when preferred articles are duplicated", () => {
+    expect(formService).toHaveProperty("assignUniqueLegalBasisOptions");
+    const assign = (formService as unknown as {
+      assignUniqueLegalBasisOptions: (
+        options: Array<Array<{ legalBasis: string; articleNumber: string; articleTitle: string; score: number; sourceType: "storage" }>>,
+        preferred: string[],
+      ) => string[];
+    }).assignUniqueLegalBasisOptions;
+    const option = (article: string, score: number) => ({
+      legalBasis: `산업안전보건기준에 관한 규칙 ${article}(테스트 조문)`,
+      articleNumber: article,
+      articleTitle: "테스트 조문",
+      score,
+      sourceType: "storage" as const,
+    });
+    const duplicated = "산업안전보건기준에 관한 규칙 제172조(테스트 조문)";
+
+    const assigned = assign([
+      [option("제172조", 99), option("제179조", 95)],
+      [option("제172조", 98), option("제39조", 96)],
+      [option("제172조", 97), option("제184조", 94)],
+    ], [duplicated, duplicated, duplicated]);
+
+    expect(assigned).toEqual([
+      duplicated,
+      "산업안전보건기준에 관한 규칙 제39조(테스트 조문)",
+      "산업안전보건기준에 관한 규칙 제184조(테스트 조문)",
+    ]);
+  });
+
   it("does not reuse the same legal basis even when rows share the same mechanism", () => {
     const rows = [
       {
