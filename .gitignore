@@ -8,6 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 .env.local
+.env
+.env.*
+!.env.example
 .pnpm-store
 .next
 node_modules
@@ -24,3 +27,31 @@ supabase/.env.functions
 *.njsproj
 *.sln
 *.sw?
+
+# 생성물 (scripts/ingest-law-pdf.mjs)
+output/law-corpus
+
+# deno check/run 실행 시 생성 (프로젝트는 deno 를 패키지 매니저로 쓰지 않음)
+deno.lock
+
+# 실사진 검증 샘플 (저장소에 커밋하지 않음)
+docs/scan-samples/*
+!docs/scan-samples/README.md
+!docs/scan-samples/expectations.example.json
+
+# Local agent and browser-workspace artifacts
+.agents/
+.claude/
+.codex_tmp/
+.codex-ppt-inventory-*/
+.playwright-mcp/
+
+# Local generated materials and media (not required by the web deployment)
+tmp/
+output/
+*.mp4
+*.docx
+*.xlsx
+*.hwp
+legal-markdown/*.pdf
+diff --git a/vercel.json b/vercel.json

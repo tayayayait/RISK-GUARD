@@ -1,7 +1,14 @@
 import { memo, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { RISK_CATEGORY_OPTIONS, normalizeRiskCategoryValue } from "@/services/formService";
-import type { RiskAssessmentRow } from "@/types/formTemplate";
+import { formatRiskLevel, resolveAcceptability } from "@/lib/riskRowAcceptability";
+import {
+  IMPROVEMENT_STATUS_LABELS,
+  IMPROVEMENT_STATUS_VALUES,
+  RISK_ACCEPTABILITY_LABELS,
+  RISK_ACCEPTABILITY_VALUES,
+} from "@/types/formTemplate";
+import type { ImprovementStatus, RiskAcceptability, RiskAssessmentRow } from "@/types/formTemplate";
 import type { RiskControlIntent } from "@/types/riskControlIntent";
 
 export interface LegalBasisReviewDetail {
@@ -63,15 +70,40 @@ function clampRiskInput(value: number) {
   return Math.max(1, Math.min(5, value));
 }
 
-function toRiskLabel(score: number) {
-  if (score >= 15) return "높음";
-  if (score >= 6) return "보통";
-  return "낮음";
-}
+const IMPROVEMENT_STATUS_OPTIONS: Array<{ value: ImprovementStatus; label: string }> =
+  IMPROVEMENT_STATUS_VALUES.map((value) => ({ value, label: IMPROVEMENT_STATUS_LABELS[value] }));
 
-function formatRiskLevel(frequency: number, severity: number) {
-  const score = frequency * severity;
-  return `${score}(${toRiskLabel(score)})`;
+function AcceptabilityBadge({
+  value,
+  label,
+  disabled,
+  onChange,
+}: {
+  value: RiskAcceptability;
+  label: string;
+  disabled: boolean;
+  onChange: (value: RiskAcceptability) => void;
+}) {
+  const isAcceptable = value === "acceptable";
+  const badgeClass = isAcceptable
+    ? "border-success-600 bg-success-050 text-success-700"
+    : "border-danger-600 bg-danger-050 text-danger-700";
+
+  return (
+    <select
+      value={value}
+      aria-label={label}
+      disabled={disabled}
+      className={`mt-1 w-full cursor-pointer rounded-sm border px-1 py-0.5 text-[11px] font-medium disabled:cursor-default ${badgeClass}`}
+      onChange={(event) => onChange(event.target.value as RiskAcceptability)}
+    >
+      {RISK_ACCEPTABILITY_VALUES.map((option) => (
+        <option key={option} value={option}>
+          {RISK_ACCEPTABILITY_LABELS[option]}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function getControlIntentLabel(intent?: RiskControlIntent) {
@@ -144,6 +176,7 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
             <col style={{ width: "75px" }} />
             <col style={{ width: "90px" }} />
             <col style={{ width: "180px" }} />
+            <col style={{ width: "130px" }} />
             <col style={{ width: "120px" }} />
             <col style={{ width: "120px" }} />
             <col style={{ width: "110px" }} />
@@ -166,7 +199,7 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
                 <br />
                 (리더및팀원)
               </th>
-              <th className={META_VALUE_CELL} colSpan={3} rowSpan={2} />
+              <th className={META_VALUE_CELL} colSpan={4} rowSpan={2} />
             </tr>
             <tr className="h-9">
               <th className={META_LABEL_CELL}>평가일시</th>
@@ -188,6 +221,9 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
               </th>
               <th className={HEADER_CELL_BASE} rowSpan={2}>
                 감소대책
+              </th>
+              <th className={HEADER_CELL_BASE} rowSpan={2}>
+                개선 후 위험성
               </th>
               <th className={HEADER_CELL_BASE} rowSpan={2}>
                 개선일
@@ -362,7 +398,13 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
                   />
                 </td>
                 <td className={`${BODY_CENTER_CELL} font-semibold`}>
-                  {row.riskLevel || formatRiskLevel(row.frequency, row.severity)}
+                  <div>{row.riskLevel || formatRiskLevel(row.frequency, row.severity)}</div>
+                  <AcceptabilityBadge
+                    value={row.acceptability ?? resolveAcceptability(row.frequency, row.severity).acceptability}
+                    label={`허용여부-${index + 1}`}
+                    disabled={readOnly}
+                    onChange={(nextValue) => onChange(index, "acceptability", nextValue)}
+                  />
                 </td>
                 <td className={`${BODY_TEXT_CELL}${reviewFields.has("reductionMeasure") ? reviewCellClass : ""}`}>
                   <textarea
@@ -371,6 +413,57 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
                     aria-label={`감소대책-${index + 1}`}
                     disabled={readOnly}
                     onChange={(event) => onChange(index, "reductionMeasure", event.target.value)}
+                  />
+                </td>
+                <td className={BODY_CENTER_CELL}>
+                  <div className="flex items-center justify-center gap-1">
+                    <RiskScoreInput
+                      value={row.postFrequency ?? row.frequency}
+                      label={`개선후가능성-${index + 1}`}
+                      disabled={readOnly}
+                      onChange={(nextValue) => {
+                        const nextSeverity = row.postSeverity ?? row.severity;
+                        onChange(index, "postFrequency", nextValue);
+                        onChange(index, "postRiskLevel", formatRiskLevel(nextValue, nextSeverity));
+                        onChange(
+                          index,
+                          "postAcceptability",
+                          resolveAcceptability(nextValue, nextSeverity).acceptability,
+                        );
+                      }}
+                    />
+                    <span className="text-[11px] text-neutral-500">×</span>
+                    <RiskScoreInput
+                      value={row.postSeverity ?? row.severity}
+                      label={`개선후중대성-${index + 1}`}
+                      disabled={readOnly}
+                      onChange={(nextValue) => {
+                        const nextFrequency = row.postFrequency ?? row.frequency;
+                        onChange(index, "postSeverity", nextValue);
+                        onChange(index, "postRiskLevel", formatRiskLevel(nextFrequency, nextValue));
+                        onChange(
+                          index,
+                          "postAcceptability",
+                          resolveAcceptability(nextFrequency, nextValue).acceptability,
+                        );
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 font-semibold" data-testid={`post-risk-level-${index}`}>
+                    {row.postRiskLevel
+                      || formatRiskLevel(row.postFrequency ?? row.frequency, row.postSeverity ?? row.severity)}
+                  </div>
+                  <AcceptabilityBadge
+                    value={
+                      row.postAcceptability
+                      ?? resolveAcceptability(
+                        row.postFrequency ?? row.frequency,
+                        row.postSeverity ?? row.severity,
+                      ).acceptability
+                    }
+                    label={`개선후허용여부-${index + 1}`}
+                    disabled={readOnly}
+                    onChange={(nextValue) => onChange(index, "postAcceptability", nextValue)}
                   />
                 </td>
                 <td className={BODY_CENTER_CELL}>
@@ -392,6 +485,19 @@ export const RiskAssessmentTable = memo(function RiskAssessmentTable({
                     disabled={readOnly}
                     onChange={(event) => onChange(index, "completionDate", event.target.value)}
                   />
+                  <select
+                    value={row.improvementStatus ?? "planned"}
+                    aria-label={`이행상태-${index + 1}`}
+                    className={`${INLINE_INPUT_BASE} mt-1 h-7 cursor-pointer text-center text-[11px]`}
+                    disabled={readOnly}
+                    onChange={(event) => onChange(index, "improvementStatus", event.target.value)}
+                  >
+                    {IMPROVEMENT_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className={BODY_CENTER_CELL}>
                   <input

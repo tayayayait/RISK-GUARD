@@ -1,7 +1,4 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-// Default to auth headers ON. Set VITE_SUPABASE_USE_AUTH_HEADERS=false only when explicitly needed.
-const SUPABASE_USE_AUTH_HEADERS = import.meta.env.VITE_SUPABASE_USE_AUTH_HEADERS !== "false";
+import { getSupabaseClient } from "@/integrations/supabase/client";
 
 interface InvokeBackendOptions {
   supabaseFunction: string;
@@ -15,38 +12,52 @@ function normalizeBaseUrl(url: string) {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-function toRequestHeaders() {
-  // Use a simple request by default to avoid browser preflight failures on non-2xx OPTIONS.
-  const headers: Record<string, string> = {
-    "Content-Type": "text/plain;charset=UTF-8",
-  };
+function readSupabaseUrl() {
+  return (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+}
 
-  if (SUPABASE_USE_AUTH_HEADERS) {
-    if (!SUPABASE_ANON_KEY) {
-      console.warn("[Supabase] VITE_SUPABASE_USE_AUTH_HEADERS=true but VITE_SUPABASE_ANON_KEY is missing.");
-    } else {
-      headers.apikey = SUPABASE_ANON_KEY;
-      headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
-    }
+function readSupabaseApiKey() {
+  return (
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
+    || (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
+  )?.trim();
+}
+
+async function toRequestHeaders() {
+  const apiKey = readSupabaseApiKey();
+  if (!apiKey) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
   }
 
-  return headers;
+  const client = getSupabaseClient();
+  const { data, error } = await client.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (error || !accessToken) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  return {
+    "Content-Type": "text/plain;charset=UTF-8",
+    apikey: apiKey,
+    Authorization: `Bearer ${accessToken}`,
+  };
 }
 
 async function invokeSupabaseFunction<T>(functionName: string, payload: unknown, timeoutMs = 30000): Promise<T | null> {
-  if (!SUPABASE_URL) {
+  const supabaseUrl = readSupabaseUrl();
+  if (!supabaseUrl) {
     console.warn(`[Supabase] Backend not configured. Cannot invoke ${functionName}`);
     return null;
   }
 
-  const baseUrl = normalizeBaseUrl(SUPABASE_URL);
+  const baseUrl = normalizeBaseUrl(supabaseUrl);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${baseUrl}/functions/v1/${functionName}`, {
       method: "POST",
-      headers: toRequestHeaders(),
+      headers: await toRequestHeaders(),
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -72,6 +83,9 @@ async function invokeSupabaseFunction<T>(functionName: string, payload: unknown,
 
     return (await response.json()) as T;
   } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+      throw error;
+    }
     if (error instanceof Error && error.name === 'AbortError') {
       console.error(`[Supabase] Function ${functionName} timed out after ${timeoutMs}ms`);
       throw new Error(`Timeout: ${functionName}`);
@@ -95,6 +109,9 @@ export async function invokeBackend<T>(options: InvokeBackendOptions): Promise<T
       throw new Error(`Empty response: ${supabaseFunction}`);
     }
   } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+      throw error;
+    }
     console.warn(`[Backend] Failed to invoke proxy for ${supabaseFunction}:`, error);
     if (throwOnError) {
       throw error;

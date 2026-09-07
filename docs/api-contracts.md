@@ -1,4 +1,4 @@
-﻿# API Contracts (Supabase Edge Functions)
+# API Contracts (Supabase Edge Functions)
 
 Date: 2026-04-13
 
@@ -7,8 +7,8 @@ Date: 2026-04-13
 - Base URL: `https://dkslgsguxlznapiygier.supabase.co/functions/v1`
 - Method: `POST`
 - Headers:
-  - `apikey: <VITE_SUPABASE_ANON_KEY>`
-  - `Authorization: Bearer <VITE_SUPABASE_ANON_KEY>`
+  - `apikey: <VITE_SUPABASE_PUBLISHABLE_KEY 또는 VITE_SUPABASE_ANON_KEY>`
+  - `Authorization: Bearer <로그인 사용자의 Supabase access_token>`
   - `Content-Type: application/json`
 
 ## Runtime policy
@@ -685,3 +685,99 @@ Date: 2026-04-13
 - forms fallback: 없음 (`kosha-law-guides-form` 결과가 `null`이어도 legacy 재시도하지 않음)
 - assessment flow law search always uses `kosha-law-evidence`
 - assessment flow does not call legacy fallback when `kosha-law-evidence` returns `null`
+
+## 2026-08-18 M1 Scan-Understand Contract
+
+### `msds-scan-analyze`
+
+- Path: `/msds-scan-analyze`
+- Method: `POST`
+- Description: 화학물질 라벨/MSDS/작업지시서 스캔 분석 및 공공 MSDS/GHS 기반 보호구·응급조치 안내
+
+#### Request
+```json
+{
+  "mode": "text", // "text" | "image"
+  "text": "톨루엔 CAS 108-88-3",
+  "image": "base64...", // optional (mode="image")
+  "mimeType": "image/jpeg", // optional
+  "locale": "ko", // "ko"|"en"|"vi"|"th"|"km"|"uz"|"zh"|"ne"
+  "hint": {
+    "productName": "톨루엔",
+    "casNo": "108-88-3"
+  },
+  "selectedChemId": "001032" // optional
+}
+```
+
+#### Response (200 OK)
+```json
+{
+  "docType": "msds",
+  "extraction": { "rawText": "..." },
+  "substance": {
+    "chemId": "001032",
+    "chemNameKor": "톨루엔",
+    "casNo": "108-88-3",
+    "unNo": "1294",
+    "resolvedBy": "cas",
+    "confidence": "high"
+  },
+  "needsUserSelection": null,
+  "hazard": {
+    "classifications": ["인화성 액체 : 구분2", "피부 부식성/피부 자극성 : 구분2"],
+    "pictograms": ["GHS02", "GHS07", "GHS08"],
+    "signalWord": "위험",
+    "hCodes": [{ "code": "H225", "text": "고인화성 액체 및 증기" }],
+    "pCodes": {
+      "prevention": [],
+      "response": [{ "code": "P301+P310", "text": "삼켰다면: 즉시 독극물센터/의사의 진찰을 받으시오." }],
+      "storage": [],
+      "disposal": []
+    },
+    "nfpa": null
+  },
+  "firstAid": {
+    "eye": ["많은 양의 물을 사용하여..."],
+    "skin": ["오염된 의복 및 신발을 벗고..."],
+    "inhalation": ["신선한 공기가 있는 곳으로..."],
+    "ingestion": ["구토를 유도하지 마시오."],
+    "physicianNote": ["노출상황을 의료진에게..."]
+  },
+  "handling": { "sectionNo": 7, "nodes": [] },
+  "ppe": {
+    "exposureLimits": { "domestic": "TWA : 50ppm | STEL : 150ppm(허용기준)", "acgih": "TWA 20 ppm", "biological": null },
+    "engineeringControl": ["국소배기장치를 설치하고..."],
+    "ppe": {
+      "respiratory": ["한국산업안전보건공단 인증 유기화합물용 방독마스크를 착용하시오."],
+      "eye": ["화학물질용 보안경 또는 안면보호구를 착용하시오."],
+      "hand": ["적절한 내화학성 장갑을 착용하시오."],
+      "body": ["적절한 내화학성 보호복 및 안전화를 착용하시오."]
+    }
+  },
+  "regulation": {
+    "oshAct": ["작업환경측정대상물질 (측정주기 : 6개월)", "관리대상유해물질"],
+    "chemicalControlAct": ["사고대비물질"],
+    "hazmatAct": ["4류 제1석유류(비수용성) (200L)"],
+    "wasteAct": ["지정폐기물"],
+    "reachKorea": ["기존화학물질"],
+    "others": []
+  },
+  "ppeChecklist": [
+    { "part": "respiratory", "requirement": "한국산업안전보건공단 인증 유기화합물용 방독마스크를 착용하시오.", "sourceItemCode": "H0602" },
+    { "part": "eye", "requirement": "화학물질용 보안경 또는 안면보호구를 착용하시오.", "sourceItemCode": "H0604" },
+    { "part": "hand", "requirement": "적절한 내화학성 장갑을 착용하시오.", "sourceItemCode": "H0606" },
+    { "part": "body", "requirement": "적절한 내화학성 보호복 및 안전화를 착용하시오.", "sourceItemCode": "H0608" }
+  ],
+  "discrepancies": [],
+  "sources": [
+    { "label": "안전보건공단 화학물질정보 (MSDS)", "api": "KOSHA MSDS OpenAPI", "url": "https://msds.kosha.or.kr", "retrievedAt": "2026-08-18T15:00:00.000Z" }
+  ],
+  "disclaimer": "본 정보는 안전보건공단 화학물질정보시스템 자료를 바탕으로 한 참고용입니다.\n산업안전보건법 제110조·제111조에 따라 MSDS의 작성·제공은 화학물질 제조·수입자의 의무이며,\n실제 작업 시에는 반드시 현장에 비치된 MSDS 원본을 확인하십시오.",
+  "meta": {
+    "servedFromCache": false,
+    "quotaExceeded": false,
+    "warnings": []
+  }
+}
+```

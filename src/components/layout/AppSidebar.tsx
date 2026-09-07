@@ -1,5 +1,5 @@
-﻿import { useCallback, useMemo } from "react";
-import { Home, ClipboardList, Settings, Shield, AlertTriangle } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { Home, ClipboardList, Settings, Shield, AlertTriangle, ScanLine, MessageSquareText } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useOptionalAssessment } from "@/contexts/AssessmentContext";
@@ -22,6 +22,16 @@ const SIDEBAR_ITEMS = [
     title: "사고 예측",
     icon: AlertTriangle,
     route: "/prediction",
+  },
+  {
+    title: "화학물질 스캔",
+    icon: ScanLine,
+    route: "/scan",
+  },
+  {
+    title: "안전법령 Q&A",
+    icon: MessageSquareText,
+    route: "/safety-qa",
   },
   {
     title: "설정",
@@ -69,8 +79,11 @@ export function AppSidebar({ currentStep }: Props) {
         <div className="space-y-space-1">
           {SIDEBAR_ITEMS.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.route ||
-                            (item.isAssessmentFlow && location.pathname.startsWith('/assessments'));
+            const isActive =
+              location.pathname === item.route ||
+              (item.isAssessmentFlow && location.pathname.startsWith("/assessments")) ||
+              (item.route === "/safety-qa" && (location.pathname === "/safety-qa" || location.pathname === "/qa")) ||
+              (item.route === "/forms" && location.pathname.startsWith("/forms"));
 
             return (
               <div key={item.title}>

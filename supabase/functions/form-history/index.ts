@@ -114,6 +114,30 @@ function normalizeFormType(value: unknown): FormType {
   return parseFormType(value) ?? "risk-assessment";
 }
 
+const RISK_ACCEPTABILITY_VALUES = ["acceptable", "not_acceptable"];
+const IMPROVEMENT_STATUS_VALUES = ["planned", "in_progress", "done", "deferred"];
+
+function toRiskAcceptability(value: unknown, fallback: string) {
+  const normalized = toSafeString(value, 40);
+  return RISK_ACCEPTABILITY_VALUES.includes(normalized) ? normalized : fallback;
+}
+
+function toImprovementStatus(value: unknown) {
+  const normalized = toSafeString(value, 40);
+  return IMPROVEMENT_STATUS_VALUES.includes(normalized) ? normalized : "planned";
+}
+
+function toOptionalRiskScale(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.min(5, Math.max(1, Math.round(parsed)));
+}
+
 function sanitizeRiskRows(rawRows: unknown[]) {
   if (rawRows.length === 0) {
     throw new Error("VALIDATION_ERROR:riskRows must not be empty.");
@@ -143,6 +167,15 @@ function sanitizeRiskRows(rawRows: unknown[]) {
       improvementDate: toSafeString(row.improvementDate, 20),
       completionDate: toSafeString(row.completionDate, 20),
       responsiblePerson: toSafeString(row.responsiblePerson, 80),
+      // 허용 가능 여부 / 개선 후 위험성 / 이행 상태.
+      // 이 필드들을 빼면 서식센터 이력에서 복원할 때 법정 항목이 사라진다.
+      acceptability: toRiskAcceptability(row.acceptability, "not_acceptable"),
+      acceptabilityBasis: toSafeString(row.acceptabilityBasis, 400),
+      postFrequency: toOptionalRiskScale(row.postFrequency),
+      postSeverity: toOptionalRiskScale(row.postSeverity),
+      postAcceptability: toRiskAcceptability(row.postAcceptability, ""),
+      improvementStatus: toImprovementStatus(row.improvementStatus),
+      completionNote: toSafeString(row.completionNote, 600),
     };
   });
 }

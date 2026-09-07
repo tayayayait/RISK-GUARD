@@ -1,4 +1,9 @@
 // Shared document building utilities
+import {
+  IMPROVEMENT_STATUS_LABELS,
+  RISK_ACCEPTABILITY_LABELS,
+} from "@/types/formTemplate";
+import type { RiskAssessmentRow } from "@/types/formTemplate";
 
 export const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -184,12 +189,91 @@ export interface RiskAssessmentDocxRow {
   completionDate: string;
   responsiblePerson: string;
   note?: string;
+  /** 허용 가능 여부 표기 (예: "허용 불가") */
+  acceptabilityLabel?: string;
+  /** 개선 후 위험성 (예: "8(보통)") */
+  postRiskLevel?: string;
+  postAcceptabilityLabel?: string;
+  /** 이행 상태 표기 (예: "진행중") */
+  improvementStatusLabel?: string;
+}
+
+function withAcceptability(riskLevel: string, acceptabilityLabel?: string) {
+  const level = riskLevel.trim();
+  const label = (acceptabilityLabel ?? "").trim();
+  if (!label) {
+    return level;
+  }
+  return level ? `${level}
+${label}` : label;
+}
+
+function withImprovementStatus(completionDate: string, statusLabel?: string) {
+  const date = completionDate.trim();
+  const label = (statusLabel ?? "").trim();
+  if (!label) {
+    return date;
+  }
+  return date ? `${date}
+${label}` : label;
+}
+
+/** 시행규칙 제37조의4제1항제2호: 평가 참여 근로자 기록 */
+export interface RiskAssessmentDocxParticipant {
+  name: string;
+  role: string;
+  method: string;
+  participatedAt: string;
+  affiliation?: string;
+}
+
+/** 시행규칙 제37조의3: 결과 공유 기록 */
+export interface RiskAssessmentDocxShare {
+  phase: string;
+  method: string;
+  sharedAt: string;
+  content: string;
+  audienceNote?: string;
 }
 
 export interface RiskAssessmentDocxMeta {
   processName?: string;
   evaluatedAt?: string;
   evaluator?: string;
+  participants?: RiskAssessmentDocxParticipant[];
+  shareRecords?: RiskAssessmentDocxShare[];
+}
+
+/** RiskAssessmentRow(단일 진실) -> DOCX 출력 행 */
+export function mapRiskRowToDocxRow(row: RiskAssessmentRow, note = ""): RiskAssessmentDocxRow {
+  return {
+    workProcess: row.workProcess,
+    category: row.category,
+    cause: row.cause,
+    hazardFactor: row.hazardFactor,
+    legalBasis: row.legalBasis,
+    currentMeasure: row.currentMeasure,
+    frequency: String(row.frequency ?? ""),
+    severity: String(row.severity ?? ""),
+    riskLevel: row.riskLevel,
+    reductionMeasure: row.reductionMeasure,
+    improvementDate: row.improvementDate ?? "",
+    completionDate: row.completionDate ?? "",
+    responsiblePerson: row.responsiblePerson ?? "",
+    note,
+    acceptabilityLabel: row.acceptability ? RISK_ACCEPTABILITY_LABELS[row.acceptability] : undefined,
+    postRiskLevel: row.postRiskLevel ?? "",
+    postAcceptabilityLabel: row.postAcceptability
+      ? RISK_ACCEPTABILITY_LABELS[row.postAcceptability]
+      : undefined,
+    improvementStatusLabel: row.improvementStatus
+      ? IMPROVEMENT_STATUS_LABELS[row.improvementStatus]
+      : undefined,
+  };
+}
+
+export function mapRiskRowsToDocxRows(rows: RiskAssessmentRow[]): RiskAssessmentDocxRow[] {
+  return rows.map((row) => mapRiskRowToDocxRow(row));
 }
 
 type ParagraphAlignment = "left" | "center";
@@ -215,7 +299,7 @@ interface RiskTableRowOptions {
 }
 
 const RISK_TABLE_COLUMN_WIDTHS = [
-  1051, 901, 1426, 1576, 1276, 1276, 563, 563, 675, 1351, 901, 901, 825, 673,
+  1051, 901, 1300, 1450, 1150, 1150, 563, 563, 675, 1250, 700, 901, 901, 825, 578,
 ];
 
 const RISK_TABLE_LABELS = {
@@ -229,6 +313,7 @@ const RISK_TABLE_LABELS = {
   currentStatusMeasure: "\uD604\uC7AC\uC0C1\uD0DC \uBC0F \uC870\uCE58",
   currentRisk: "\uD604\uC7AC\uC704\uD5D8\uC131",
   reductionMeasure: "\uAC10\uC18C\uB300\uCC45",
+  postRisk: "\uAC1C\uC120 \uD6C4\n\uC704\uD5D8\uC131",
   improvementDate: "\uAC1C\uC120\uC77C",
   completionDate: "\uC644\uB8CC\uC77C",
   responsiblePerson: "\uB2F4\uB2F9\uC790",
@@ -254,22 +339,29 @@ const A4_LANDSCAPE_PAGE_WIDTH = 16838;
 const A4_LANDSCAPE_PAGE_HEIGHT = 11906;
 const RISK_TABLE_PAGE_TOP_MARGIN = 360;
 
-const RISK_TABLE_BODY_FIELDS: Array<keyof RiskAssessmentDocxRow> = [
-  "workProcess",
-  "category",
-  "cause",
-  "hazardFactor",
-  "legalBasis",
-  "currentMeasure",
-  "frequency",
-  "severity",
-  "riskLevel",
-  "reductionMeasure",
-  "improvementDate",
-  "completionDate",
-  "responsiblePerson",
-  "note",
-];
+/**
+ * 본문 셀에 실제로 찍히는 문자열. 열 순서는 RISK_TABLE_COLUMN_WIDTHS와 1:1이며,
+ * 렌더링과 행 높이 추정이 같은 값을 보도록 여기 한 곳에서만 만든다.
+ */
+function buildRiskBodyCellTexts(row: RiskAssessmentDocxRow): string[] {
+  return [
+    row.workProcess,
+    row.category,
+    row.cause,
+    row.hazardFactor,
+    row.legalBasis,
+    row.currentMeasure,
+    row.frequency,
+    row.severity,
+    withAcceptability(row.riskLevel, row.acceptabilityLabel),
+    row.reductionMeasure,
+    withAcceptability(row.postRiskLevel ?? "", row.postAcceptabilityLabel),
+    row.improvementDate,
+    withImprovementStatus(row.completionDate, row.improvementStatusLabel),
+    row.responsiblePerson,
+    row.note ?? "",
+  ];
+}
 
 function sumRiskColumnWidths(start: number, span = 1) {
   let total = 0;
@@ -367,9 +459,7 @@ function estimateWrappedLineCount(text: string, columnWidth: number) {
 function estimateRiskBodyRowHeight(row: RiskAssessmentDocxRow) {
   let maxLineCount = 1;
 
-  RISK_TABLE_BODY_FIELDS.forEach((field, index) => {
-    const rawValue = row[field];
-    const value = typeof rawValue === "string" ? rawValue : "";
+  buildRiskBodyCellTexts(row).forEach((value, index) => {
     const lineCount = estimateWrappedLineCount(value, RISK_TABLE_COLUMN_WIDTHS[index]);
     maxLineCount = Math.max(maxLineCount, lineCount);
   });
@@ -403,7 +493,7 @@ export function buildRiskAssessmentDocxTable(
         { start: 1, span: 4, text: meta.processName ?? "", align: "left", verticalAlign: "top" },
         { start: 5, span: 4, text: RISK_TABLE_LABELS.title, align: "center", bold: true, fontSize: 38, vMerge: "restart" },
         { start: 9, span: 2, text: RISK_TABLE_LABELS.evaluator, align: "center", bold: true, vMerge: "restart", fill: "F5F5F5" },
-        { start: 11, span: 3, text: meta.evaluator ?? "", align: "center", vMerge: "restart" },
+        { start: 11, span: 4, text: meta.evaluator ?? "", align: "center", vMerge: "restart" },
       ],
       { height: RISK_TABLE_HEADER_ROW_HEIGHTS[0] },
     ),
@@ -413,7 +503,7 @@ export function buildRiskAssessmentDocxTable(
         { start: 1, span: 4, text: meta.evaluatedAt ?? "", align: "left", verticalAlign: "top", noWrap: true },
         { start: 5, span: 4, vMerge: "continue" },
         { start: 9, span: 2, vMerge: "continue" },
-        { start: 11, span: 3, vMerge: "continue" },
+        { start: 11, span: 4, vMerge: "continue" },
       ],
       { height: RISK_TABLE_HEADER_ROW_HEIGHTS[1] },
     ),
@@ -425,10 +515,11 @@ export function buildRiskAssessmentDocxTable(
         { start: 5, text: RISK_TABLE_LABELS.currentStatusMeasure, align: "center", bold: true, vMerge: "restart" },
         { start: 6, span: 3, text: RISK_TABLE_LABELS.currentRisk, align: "center", bold: true },
         { start: 9, text: RISK_TABLE_LABELS.reductionMeasure, align: "center", bold: true, vMerge: "restart" },
-        { start: 10, text: RISK_TABLE_LABELS.improvementDate, align: "center", bold: true, vMerge: "restart" },
-        { start: 11, text: RISK_TABLE_LABELS.completionDate, align: "center", bold: true, vMerge: "restart" },
-        { start: 12, text: RISK_TABLE_LABELS.responsiblePerson, align: "center", bold: true, vMerge: "restart" },
-        { start: 13, text: RISK_TABLE_LABELS.note, align: "center", bold: true, vMerge: "restart" },
+        { start: 10, text: RISK_TABLE_LABELS.postRisk, align: "center", bold: true, vMerge: "restart" },
+        { start: 11, text: RISK_TABLE_LABELS.improvementDate, align: "center", bold: true, vMerge: "restart" },
+        { start: 12, text: RISK_TABLE_LABELS.completionDate, align: "center", bold: true, vMerge: "restart" },
+        { start: 13, text: RISK_TABLE_LABELS.responsiblePerson, align: "center", bold: true, vMerge: "restart" },
+        { start: 14, text: RISK_TABLE_LABELS.note, align: "center", bold: true, vMerge: "restart" },
       ],
       { height: RISK_TABLE_HEADER_ROW_HEIGHTS[2] },
     ),
@@ -448,30 +539,35 @@ export function buildRiskAssessmentDocxTable(
         { start: 11, vMerge: "continue" },
         { start: 12, vMerge: "continue" },
         { start: 13, vMerge: "continue" },
+        { start: 14, vMerge: "continue" },
       ],
       { height: RISK_TABLE_HEADER_ROW_HEIGHTS[3] },
     ),
   ];
 
-  const bodyRows = rows.map((row, index) => buildRiskTableRow(
-    [
-      { start: 0, text: row.workProcess, verticalAlign: "top" },
-      { start: 1, text: row.category, align: "center", verticalAlign: "top" },
-      { start: 2, text: row.cause, verticalAlign: "top" },
-      { start: 3, text: row.hazardFactor, verticalAlign: "top" },
-      { start: 4, text: row.legalBasis, verticalAlign: "top" },
-      { start: 5, text: row.currentMeasure, verticalAlign: "top" },
-      { start: 6, text: row.frequency, align: "center", noWrap: true },
-      { start: 7, text: row.severity, align: "center", noWrap: true },
-      { start: 8, text: row.riskLevel, align: "center", bold: true, noWrap: true },
-      { start: 9, text: row.reductionMeasure, verticalAlign: "top" },
-      { start: 10, text: row.improvementDate, align: "center", noWrap: true },
-      { start: 11, text: row.completionDate, align: "center", noWrap: true },
-      { start: 12, text: row.responsiblePerson, align: "center", noWrap: true },
-      { start: 13, text: row.note ?? "", align: "center" },
-    ],
-    { height: bodyRowHeights[index] ?? RISK_TABLE_BODY_MIN_ROW_HEIGHT },
-  ));
+  const bodyRows = rows.map((row, index) => {
+    const cellTexts = buildRiskBodyCellTexts(row);
+    return buildRiskTableRow(
+      [
+        { start: 0, text: cellTexts[0], verticalAlign: "top" },
+        { start: 1, text: cellTexts[1], align: "center", verticalAlign: "top" },
+        { start: 2, text: cellTexts[2], verticalAlign: "top" },
+        { start: 3, text: cellTexts[3], verticalAlign: "top" },
+        { start: 4, text: cellTexts[4], verticalAlign: "top" },
+        { start: 5, text: cellTexts[5], verticalAlign: "top" },
+        { start: 6, text: cellTexts[6], align: "center", noWrap: true },
+        { start: 7, text: cellTexts[7], align: "center", noWrap: true },
+        { start: 8, text: cellTexts[8], align: "center", bold: true },
+        { start: 9, text: cellTexts[9], verticalAlign: "top" },
+        { start: 10, text: cellTexts[10], align: "center" },
+        { start: 11, text: cellTexts[11], align: "center", noWrap: true },
+        { start: 12, text: cellTexts[12], align: "center" },
+        { start: 13, text: cellTexts[13], align: "center", noWrap: true },
+        { start: 14, text: cellTexts[14], align: "center" },
+      ],
+      { height: bodyRowHeights[index] ?? RISK_TABLE_BODY_MIN_ROW_HEIGHT },
+    );
+  });
 
   return `
     <w:tbl>
@@ -503,12 +599,70 @@ export function buildRiskAssessmentDocxTable(
   `;
 }
 
+const RISK_APPENDIX_LABELS = {
+  participants: "평가 참여자",
+  participantHeaders: ["성명", "구분", "참여 방법", "참여일"],
+  shareRecords: "결과 공유 기록",
+  shareHeaders: ["구분", "방법", "공유일", "대상", "공유 내용"],
+};
+
+function buildAppendixHeading(text: string) {
+  return `
+    <w:p>
+      <w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>
+      <w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r>
+    </w:p>
+  `;
+}
+
+/**
+ * 참여자(시행규칙 제37조의4제1항제2호)와 공유 기록(제37조의3)은 평가 단위 데이터라
+ * 평가표 아래에 별도 표로 덧붙인다. 기록이 없으면 아무것도 출력하지 않는다.
+ */
+function buildRiskAssessmentAppendix(meta: RiskAssessmentDocxMeta) {
+  const participants = meta.participants ?? [];
+  const shareRecords = meta.shareRecords ?? [];
+  const blocks: string[] = [];
+
+  if (participants.length > 0) {
+    blocks.push(buildAppendixHeading(RISK_APPENDIX_LABELS.participants));
+    blocks.push(buildDocxTable(
+      RISK_APPENDIX_LABELS.participantHeaders,
+      participants.map((participant) => [
+        participant.affiliation
+          ? `${participant.name} (${participant.affiliation})`
+          : participant.name,
+        participant.role,
+        participant.method,
+        participant.participatedAt,
+      ]),
+    ));
+  }
+
+  if (shareRecords.length > 0) {
+    blocks.push(buildAppendixHeading(RISK_APPENDIX_LABELS.shareRecords));
+    blocks.push(buildDocxTable(
+      RISK_APPENDIX_LABELS.shareHeaders,
+      shareRecords.map((record) => [
+        record.phase,
+        record.method,
+        record.sharedAt,
+        record.audienceNote ?? "",
+        record.content,
+      ]),
+    ));
+  }
+
+  return blocks.join("");
+}
+
 export function buildRiskAssessmentDocumentXml(rows: RiskAssessmentDocxRow[], meta: RiskAssessmentDocxMeta = {}) {
   const bodyRowHeights = estimateRiskBodyRowHeights(rows);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     ${buildRiskAssessmentDocxTable(rows, meta, bodyRowHeights)}
+    ${buildRiskAssessmentAppendix(meta)}
     ${buildRiskAssessmentSectionProperties()}
   </w:body>
 </w:document>`;

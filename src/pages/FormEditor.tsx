@@ -32,7 +32,7 @@ import type {
 } from "@/types/formTemplate";
 import type { AssessmentData, EvidenceItem } from "@/types/assessment";
 import type { CompanyProfile, CompanyProfileStorageSource } from "@/types/companyProfile";
-import { buildRiskAssessmentDocxBlob } from "@/lib/documentBuilder";
+import { buildRiskAssessmentDocxBlob, mapRiskRowsToDocxRows } from "@/lib/documentBuilder";
 import { buildAccidentReportDocxBlob } from "@/lib/accidentReportDocxBuilder";
 import { ACCIDENT_REPORT_EXPORT_ROOT_ID } from "@/lib/exportRootIds";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,10 @@ import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { RISK_ASSESSMENT_TEMPLATE_HINT } from "@/lib/riskAssessmentTemplateHint";
 import { FormHistoryService } from "@/services/formHistoryService";
+import {
+  RiskAssessmentStoreService,
+  pickStoredRiskAssessmentMatch,
+} from "@/services/riskAssessmentStoreService";
 import { RiskValidationAuditService } from "@/services/riskValidationAuditService";
 
 type FormType = "risk-assessment" | "accident-report";
@@ -1149,6 +1153,31 @@ export default function FormEditor() {
     applyRiskRowsValidation,
   ]);
 
+  /**
+   * 주 흐름에서 저장한 위험성평가표를 찾아 읽는다.
+   * 같은 작업을 서식센터에서 다시 AI로 분석하면 주 흐름과 다른 결과가 나오므로,
+   * 저장된 riskRows가 있으면 그것이 단일 진실이다.
+   * 저장 서버가 없거나 조회에 실패하면 null을 돌려 기존 AI 경로로 넘어간다.
+   */
+  const loadStoredRiskRows = useCallback(async (
+    matchTaskName: string,
+    matchSiteName: string,
+  ): Promise<RiskAssessmentRow[] | null> => {
+    try {
+      const summaries = await RiskAssessmentStoreService.list();
+      const match = pickStoredRiskAssessmentMatch(summaries, matchTaskName, matchSiteName);
+      if (!match) {
+        return null;
+      }
+
+      const detail = await RiskAssessmentStoreService.get(match.id);
+      return detail.riskRows.length > 0 ? detail.riskRows : null;
+    } catch (error) {
+      console.warn("[FormEditor] Failed to load stored risk assessment. Falling back to AI analysis.", error);
+      return null;
+    }
+  }, []);
+
   const handleAccidentFieldChange = useCallback((fieldPath: string, value: unknown) => {
     setAccidentData((prev) => (prev ? setNestedValue(prev, fieldPath, value) : prev));
   }, []);
@@ -1176,6 +1205,26 @@ export default function FormEditor() {
       : [];
 
     try {
+      if (activeFormType === "risk-assessment") {
+        const storedRows = await loadStoredRiskRows(resolvedTaskName, siteName.trim());
+        if (storedRows) {
+          const validationResult = applyRiskRowsValidation(storedRows, {
+            rewriteInvalidFields: false,
+            includeEvents: false,
+          });
+          setRiskData(validationResult.rows);
+          setLegalBasisReviewRequiredByRow(buildLegalBasisReviewRequiredByRows(validationResult.rows));
+          setLegalBasisReviewDetailsByRow([]);
+          lastRiskValidationEventsRef.current = [];
+          setAccidentData(null);
+          toast({
+            title: "저장된 위험성평가 불러오기",
+            description: `저장된 위험성평가표 ${storedRows.length}행을 불러왔습니다. 같은 작업을 다시 분석하지 않았습니다.`,
+          });
+          return;
+        }
+      }
+
       const nextAssessment = await analyzeTaskToAssessment({
         taskName: resolvedTaskName,
         taskDescription: fullDescription,
@@ -1270,22 +1319,7 @@ export default function FormEditor() {
     if (activeFormType !== "risk-assessment" || riskData.length === 0 || isHistoryLoading) return;
 
     try {
-      const rows = riskData.map((row) => ({
-        workProcess: row.workProcess,
-        category: row.category,
-        cause: row.cause,
-        hazardFactor: row.hazardFactor,
-        legalBasis: row.legalBasis,
-        currentMeasure: row.currentMeasure,
-        frequency: row.frequency.toString(),
-        severity: row.severity.toString(),
-        riskLevel: row.riskLevel,
-        reductionMeasure: row.reductionMeasure,
-        improvementDate: row.improvementDate || "",
-        completionDate: row.completionDate || "",
-        responsiblePerson: row.responsiblePerson || "",
-        note: "",
-      }));
+      const rows = mapRiskRowsToDocxRows(riskData);
 
       const blob = buildRiskAssessmentDocxBlob(rows, {
         processName: taskName.trim(),

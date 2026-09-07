@@ -5,6 +5,7 @@ import { AppSidebar } from "./AppSidebar";
 import type { AssessmentStep } from "@/types/assessment";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 interface Props {
   children: React.ReactNode;
@@ -12,6 +13,8 @@ interface Props {
   rightPanel?: React.ReactNode;
   rightPanelDrawerOpen?: boolean;
   onRightPanelDrawerOpenChange?: (open: boolean) => void;
+  noPadding?: boolean;
+  mainClassName?: string;
 }
 
 export function DashboardShell({
@@ -20,6 +23,8 @@ export function DashboardShell({
   rightPanel,
   rightPanelDrawerOpen,
   onRightPanelDrawerOpenChange,
+  noPadding = false,
+  mainClassName,
 }: Props) {
   const [uncontrolledDrawerOpen, setUncontrolledDrawerOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -51,7 +56,15 @@ export function DashboardShell({
 
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader currentStep={currentStep} onMenuClick={() => setMobileSidebarOpen(true)} />
-        <main className="relative flex-1 overflow-y-auto p-space-6 2xl:p-space-8">
+        <main
+          className={cn(
+            "relative flex-1",
+            noPadding
+              ? "overflow-hidden flex flex-col p-0 2xl:p-0"
+              : "overflow-y-auto p-space-6 2xl:p-space-8",
+            mainClassName,
+          )}
+        >
           {rightPanel && (
             <div className="mb-space-3 hidden justify-end lg:flex xl:hidden">
               <Button
@@ -65,8 +78,10 @@ export function DashboardShell({
               </Button>
             </div>
           )}
-          <div className="flex gap-space-6">
-            <div className="min-w-0 flex-1">{children}</div>
+          <div className={cn("flex", noPadding ? "flex-1 h-full min-h-0" : "gap-space-6")}>
+            <div className={cn("min-w-0 flex-1", noPadding && "h-full flex flex-col min-h-0")}>
+              {children}
+            </div>
             {rightPanel && (
               <aside className="relative hidden w-[320px] shrink-0 xl:block 2xl:w-[360px]">
                 <div className="sticky top-0">{rightPanel}</div>
@@ -94,4 +109,5 @@ export function DashboardShell({
     </div>
   );
 }
+
 

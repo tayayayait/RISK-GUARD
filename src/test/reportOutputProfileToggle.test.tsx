@@ -12,6 +12,8 @@ const updateChecklistMock = vi.fn();
 const updateBriefingMock = vi.fn();
 const exportReportMock = vi.fn(async () => ({ ok: true, message: "done" }));
 const toastMock = vi.fn();
+const addShareRecordMock = vi.fn(async () => undefined);
+const removeShareRecordMock = vi.fn(async () => undefined);
 
 const assessmentMock = {
   ...createMockAssessment(),
@@ -48,6 +50,8 @@ vi.mock("@/contexts/AssessmentContext", () => ({
     updateChecklist: updateChecklistMock,
     updateBriefing: updateBriefingMock,
     exportReport: exportReportMock,
+    addShareRecord: addShareRecordMock,
+    removeShareRecord: removeShareRecordMock,
   }),
 }));
 
@@ -62,6 +66,7 @@ vi.mock("@/components/layout/DashboardShell", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: (...args: unknown[]) => toastMock(...args),
+  useToast: () => ({ toast: (...args: unknown[]) => toastMock(...args) }),
 }));
 
 describe("ReportOutput profile toggle", () => {

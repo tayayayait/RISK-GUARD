@@ -81,3 +81,33 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/risk-validation-audit/deno.json"
 entrypoint = "./functions/risk-validation-audit/index.ts"
+
+[functions.safety-rag-qa]
+enabled = true
+verify_jwt = false
+import_map = "./functions/safety-rag-qa/deno.json"
+entrypoint = "./functions/safety-rag-qa/index.ts"
+
+[functions.safety-qa-history]
+enabled = true
+verify_jwt = false
+import_map = "./functions/safety-qa-history/deno.json"
+entrypoint = "./functions/safety-qa-history/index.ts"
+
+[functions.gemini-evidence-summary]
+enabled = true
+verify_jwt = false
+import_map = "./functions/gemini-evidence-summary/deno.json"
+entrypoint = "./functions/gemini-evidence-summary/index.ts"
+
+[functions.msds-scan-analyze]
+enabled = true
+verify_jwt = false
+import_map = "./functions/msds-scan-analyze/deno.json"
+entrypoint = "./functions/msds-scan-analyze/index.ts"
+
+[functions.risk-assessment-store]
+enabled = true
+verify_jwt = false
+import_map = "./functions/risk-assessment-store/deno.json"
+entrypoint = "./functions/risk-assessment-store/index.ts"

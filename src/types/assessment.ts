@@ -1,6 +1,7 @@
 ﻿import { STANDARD_HAZARD_TYPES, normalizeHazardType } from "../../supabase/functions/_shared/hazard-taxonomy.ts";
 
 import type { RiskControlIntent } from "@/types/riskControlIntent";
+import type { RiskAssessmentRow } from "@/types/formTemplate";
 
 export type AssessmentStep =
   | "input"
@@ -34,6 +35,69 @@ export type MaterialHazardScope = "auto_top3" | "selected" | "all";
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export type LawActionStage = "immediate" | "same_day" | "pre_resume" | "improvement";
 export type LawFitStatus = "verified" | "review_required" | "unknown";
+
+/**
+ * 위험성평가 참여자 (시행규칙 제37조의2, 기록 요건 제37조의4제1항제2호).
+ * role: 근로자 / 근로자대표 / 관리자 / 관리감독자
+ * method: 사업장 순회 점검이 원칙이고 설문조사·면담을 병행할 수 있다.
+ */
+export type ParticipantRole = "worker" | "worker_representative" | "manager" | "supervisor";
+export type ParticipationMethod = "site_patrol" | "survey" | "interview" | "other";
+
+export interface AssessmentParticipant {
+  id: string;
+  name: string;
+  role: ParticipantRole;
+  affiliation?: string;
+  method: ParticipationMethod;
+  participatedAt?: string;
+  note?: string;
+}
+
+/**
+ * 위험성평가 결과 공유 기록 (시행규칙 제37조의3).
+ * phase "before": 실시 일정 공유 / "after": 유해·위험 요인, 위험성 수준 결정 결과,
+ * 개선대책 수립 내용 및 이행 결과 공유.
+ */
+export type SharePhase = "before" | "after";
+export type ShareMethod = "education" | "briefing" | "posting" | "written" | "electronic";
+
+export interface AssessmentShareRecord {
+  id: string;
+  phase: SharePhase;
+  method: ShareMethod;
+  sharedAt: string;
+  audienceNote?: string;
+  content: string;
+  recordedBy?: string;
+}
+
+export const PARTICIPANT_ROLE_LABELS: Record<ParticipantRole, string> = {
+  worker: "근로자",
+  worker_representative: "근로자대표",
+  manager: "관리자",
+  supervisor: "관리감독자",
+};
+
+export const PARTICIPATION_METHOD_LABELS: Record<ParticipationMethod, string> = {
+  site_patrol: "사업장 순회점검",
+  survey: "설문조사",
+  interview: "면담",
+  other: "기타",
+};
+
+export const SHARE_PHASE_LABELS: Record<SharePhase, string> = {
+  before: "실시 전 (일정 공유)",
+  after: "실시 후 (결과 공유)",
+};
+
+export const SHARE_METHOD_LABELS: Record<ShareMethod, string> = {
+  education: "안전보건교육",
+  briefing: "설명회",
+  posting: "사업장 게시",
+  written: "서면",
+  electronic: "전자적 방법",
+};
 
 export interface RiskLegalSemanticIntent {
   rowIndex: number;
@@ -346,6 +410,14 @@ export interface ReportExportState {
 
 export interface AssessmentData {
   id: string;
+  /** 서버가 발급한 UUID. 저장 전에는 undefined. */
+  persistedId?: string;
+  /** 위험성평가 담당자 (시행규칙 제37조의4제1항제1호) */
+  evaluator?: string;
+  /** 법정 산출물 단일 진실. 카드 UI는 이 데이터의 표현 중 하나다. */
+  riskRows: RiskAssessmentRow[];
+  participants: AssessmentParticipant[];
+  shareRecords: AssessmentShareRecord[];
   taskName: string;
   taskDescription: string;
   siteName: string;

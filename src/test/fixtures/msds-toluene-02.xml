@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <msdsItemCode>B</msdsItemCode>
+        <upMsdsItemCode></upMsdsItemCode>
+        <msdsItemNameKor>2. 유해성·위험성</msdsItemNameKor>
+        <itemDetail></itemDetail>
+        <lev>1</lev>
+      </item>
+      <item>
+        <msdsItemCode>B02</msdsItemCode>
+        <upMsdsItemCode>B</upMsdsItemCode>
+        <msdsItemNameKor>유해성·위험성 분류</msdsItemNameKor>
+        <itemDetail>인화성 액체 : 구분2|피부 부식성/피부 자극성 : 구분2|생식독성 : 구분2|특정표적장기 독성(1회 노출) : 구분3(마취작용)|특정표적장기 독성(반복 노출) : 구분2|흡인 유해성 : 구분1</itemDetail>
+        <lev>2</lev>
+      </item>
+      <item>
+        <msdsItemCode>B04</msdsItemCode>
+        <upMsdsItemCode>B</upMsdsItemCode>
+        <msdsItemNameKor>예방조치문구를 포함한 경고표지 항목</msdsItemNameKor>
+        <itemDetail></itemDetail>
+        <lev>2</lev>
+      </item>
+      <item>
+        <msdsItemCode>B0402</msdsItemCode>
+        <upMsdsItemCode>B04</upMsdsItemCode>
+        <msdsItemNameKor>그림문자</msdsItemNameKor>
+        <itemDetail>GHS02.gif|GHS07.gif|GHS08.gif</itemDetail>
+        <lev>3</lev>
+      </item>
+      <item>
+        <msdsItemCode>B0404</msdsItemCode>
+        <upMsdsItemCode>B04</upMsdsItemCode>
+        <msdsItemNameKor>신호어</msdsItemNameKor>
+        <itemDetail>위험</itemDetail>
+        <lev>3</lev>
+      </item>
+      <item>
+        <msdsItemCode>B0406</msdsItemCode>
+        <upMsdsItemCode>B04</upMsdsItemCode>
+        <msdsItemNameKor>유해·위험문구</msdsItemNameKor>
+        <itemDetail>H225 : 고인화성 액체 및 증기|H315 : 피부에 자극을 일으킴|H361 : 태아 또는 생식능력에 손상을 일으킬 것으로 의심됨|H336 : 졸음 또는 현기증을 일으킬 수 있음|H373 : 장기간 또는 반복노출 되면 장기에 손상을 일으킬 수 있음|H304 : 삼켜서 기도로 유입되면 치명적일 수 있음</itemDetail>
+        <lev>3</lev>
+      </item>
+      <item>
+        <msdsItemCode>B0408</msdsItemCode>
+        <upMsdsItemCode>B04</upMsdsItemCode>
+        <msdsItemNameKor>예방조치문구</msdsItemNameKor>
+        <itemDetail></itemDetail>
+        <lev>3</lev>
+      </item>
+      <item>
+        <msdsItemCode>B040802</msdsItemCode>
+        <upMsdsItemCode>B0408</upMsdsItemCode>
+        <msdsItemNameKor>예방</msdsItemNameKor>
+        <itemDetail>P201 : 사용 전 취급 설명서를 확보하시오.|P202 : 모든 안전 예방조치 문구를 읽고 이해하기 전에는 취급하지 마시오.|P210 : 열·스파크·화염·고열로부터 멀리하시오. - 금연.</itemDetail>
+        <lev>4</lev>
+      </item>
+      <item>
+        <msdsItemCode>B040804</msdsItemCode>
+        <upMsdsItemCode>B0408</upMsdsItemCode>
+        <msdsItemNameKor>대응</msdsItemNameKor>
+        <itemDetail>P301+P310 : 삼켰다면: 즉시 독극물센터/의사의 진찰을 받으시오.|P302+P352 : 피부에 묻으면 다량의 물과 비누로 씻으시오.|P331 : 토하게 하지 마시오.</itemDetail>
+        <lev>4</lev>
+      </item>
+      <item>
+        <msdsItemCode>B040806</msdsItemCode>
+        <upMsdsItemCode>B0408</upMsdsItemCode>
+        <msdsItemNameKor>저장</msdsItemNameKor>
+        <itemDetail>P403+P233 : 환기가 잘 되는 곳에 보관하고 용기를 밀폐하시오.|P405 : 잠금장치가 있는 저장장소에 저장하시오.</itemDetail>
+        <lev>4</lev>
+      </item>
+      <item>
+        <msdsItemCode>B040808</msdsItemCode>
+        <upMsdsItemCode>B0408</upMsdsItemCode>
+        <msdsItemNameKor>폐기</msdsItemNameKor>
+        <itemDetail>P501 : 관련 법규에 명시된 내용에 따라 내용물과 용기를 폐기하시오.</itemDetail>
+        <lev>4</lev>
+      </item>
+      <item>
+        <msdsItemCode>B06</msdsItemCode>
+        <upMsdsItemCode>B</upMsdsItemCode>
+        <msdsItemNameKor>기타 유해성·위험성 (NFPA)</msdsItemNameKor>
+        <itemDetail>자료없음</itemDetail>
+        <lev>2</lev>
+      </item>
+    </items>
+  </body>
+</response>

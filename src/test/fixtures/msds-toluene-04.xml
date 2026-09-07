@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <msdsItemCode>D</msdsItemCode>
+        <msdsItemNameKor>4. 응급조치요령</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>D02</msdsItemCode>
+        <upMsdsItemCode>D</upMsdsItemCode>
+        <msdsItemNameKor>눈에 들어갔을 때</msdsItemNameKor>
+        <itemDetail>많은 양의 물을 사용하여 적어도 15분 동안 눈을 씻어내시오.|콘택트렌즈를 착용하고 있는 경우 제거하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>D04</msdsItemCode>
+        <upMsdsItemCode>D</upMsdsItemCode>
+        <msdsItemNameKor>피부에 접촉했을 때</msdsItemNameKor>
+        <itemDetail>오염된 의복 및 신발을 벗고 즉시 적어도 15분 동안 비누와 물로 씻어내시오.|오염된 의복은 다시 사용하기 전에 세탁하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>D06</msdsItemCode>
+        <upMsdsItemCode>D</upMsdsItemCode>
+        <msdsItemNameKor>흡입했을 때</msdsItemNameKor>
+        <itemDetail>신선한 공기가 있는 곳으로 옮기시오.|호흡하지 않는 경우 인공호흡을 실시하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>D08</msdsItemCode>
+        <upMsdsItemCode>D</upMsdsItemCode>
+        <msdsItemNameKor>먹었을 때</msdsItemNameKor>
+        <itemDetail>구토를 유도하지 마시오.|즉시 의사의 진료를 받으시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>D10</msdsItemCode>
+        <upMsdsItemCode>D</upMsdsItemCode>
+        <msdsItemNameKor>기타 의사의 주의사항</msdsItemNameKor>
+        <itemDetail>노출상황을 의료진에게 알리고 적절한 예방조치를 취하도록 하시오.</itemDetail>
+      </item>
+    </items>
+  </body>
+</response>

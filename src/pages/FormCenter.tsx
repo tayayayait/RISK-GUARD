@@ -126,12 +126,12 @@ export default function FormCenter() {
 
   const emptyHistoryMessage = useMemo(() => {
     if (historyFilter === "risk-assessment") {
-      return "최근 30일 내 저장된 위험성평가 기록서가 없습니다.";
+      return "저장된 위험성평가 기록서가 없습니다.";
     }
     if (historyFilter === "accident-report") {
-      return "최근 30일 내 저장된 산업재해조사표가 없습니다.";
+      return "저장된 산업재해조사표가 없습니다.";
     }
-    return "최근 30일 내 저장된 서식 기록이 없습니다.";
+    return "저장된 서식 기록이 없습니다.";
   }, [historyFilter]);
 
   return (
@@ -174,7 +174,7 @@ export default function FormCenter() {
             <h2 className="text-heading-3 text-neutral-900 flex items-center gap-2">
               <span className="w-1 h-5 bg-primary-700 rounded-full" />
               <History className="h-5 w-5 text-primary-700" />
-              최근 서식 기록 (30일)
+              내 서식 기록
             </h2>
             <button
               type="button"
@@ -192,7 +192,7 @@ export default function FormCenter() {
             <div data-testid="history-panel" className="rounded-radius-lg border border-border bg-surface p-space-4 space-y-space-3">
               <div className="flex items-center justify-between">
                 <p className="text-body-sm text-neutral-600">
-                  DOCX 저장 완료 기록만 보관되며, 30일 경과 시 자동 삭제됩니다.
+                  로그인한 계정으로 저장된 DOCX 작업 기록입니다.
                 </p>
                 <button
                   type="button"
@@ -288,7 +288,6 @@ export default function FormCenter() {
                             <div className="flex items-start gap-space-3 shrink-0">
                               <div className="text-right">
                                 <p className="text-caption text-neutral-500">저장 {formatDateLabel(item.createdAt)}</p>
-                                <p className="text-caption text-neutral-500">만료 {formatDateLabel(item.expiresAt)}</p>
                               </div>
                               <button
                                 type="button"

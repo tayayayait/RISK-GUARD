@@ -1,4 +1,4 @@
-﻿# External API & File Data Inventory
+# External API & File Data Inventory
 
 Date: 2026-04-14
 
@@ -54,3 +54,17 @@ Date: 2026-04-14
 - 출력: `actionItems`, `stageCounts`
 - 단계: `immediate`, `same_day`, `pre_resume`
 - `buildLawGuidesPayload` shared core를 사용해 action-only 응답을 생성
+
+## 신규 검토 API (M1/M2, 2026-08-18 실측)
+
+| Name | 예정 Edge Function | Upstream | 상태 |
+| --- | --- | --- | --- |
+| 물질안전보건자료(MSDS) 16항목 | `msds-scan-analyze` | `apis.data.go.kr/B552468/msdschem` (`getChemList`, `getChemDetail01~16`) | 구현 완료 (Phase 1~7) |
+| 유독물 GHS 정보(그림문자/H·P코드) | `msds-scan-analyze` | `apis.data.go.kr/B552584/kecoapi/ncisghs/ghsList` | 구현 완료 (Phase 4, 7) |
+| 화학물질 정보(이름→CAS 브리지) | `msds-scan-analyze` | `apis.data.go.kr/B552584/kecoapi/ncissbstn/chemSbstnList` | 구현 완료 (Phase 6, 7) |
+| KOSHA GUIDE 목록 | `corpus-ingest-law` | `apis.data.go.kr/B552468/koshaguide/getKoshaGuide` | 활용신청 필요 (본문 없음, PDF URL만) |
+| 법령 조문 원문 | `corpus-ingest-law` | `law.go.kr/DRF/lawSearch.do`, `lawService.do` (`target=law|lawjosub|admrul`) | `LAW_GO_KR_OC` 발급 필요 |
+| PubChem 폴백 | `msds-scan-analyze` | `pubchem.ncbi.nlm.nih.gov/rest/pug`, `/rest/pug_view` | 구현 완료 (Phase 6, 7) |
+
+- Swagger 원본: `공공데이터포털 api/swagger/*.swagger.json`
+- 설계 문서: `docs/m1-m2-scan-and-rag-design.md`

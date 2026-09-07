@@ -1,10 +1,15 @@
-﻿import { beforeEach, describe, expect, it, vi } from "vitest";
-import { invokeBackend } from "@/services/edgeFunctionClient";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FormHistoryService } from "@/services/formHistoryService";
+import { UserWorkHistoryService } from "@/services/userWorkHistoryService";
 import type { RiskAssessmentRow } from "@/types/formTemplate";
 
-vi.mock("@/services/edgeFunctionClient", () => ({
-  invokeBackend: vi.fn(),
+vi.mock("@/services/userWorkHistoryService", () => ({
+  UserWorkHistoryService: {
+    create: vi.fn(),
+    list: vi.fn(),
+    get: vi.fn(),
+    remove: vi.fn(),
+  },
 }));
 
 const sampleRows: RiskAssessmentRow[] = [
@@ -26,25 +31,30 @@ const sampleRows: RiskAssessmentRow[] = [
   },
 ];
 
+const storedRiskRecord = {
+  id: "history-1",
+  feature: "form-risk-assessment" as const,
+  title: "작업명",
+  subtitle: "현장명 · 2026-04-12",
+  createdAt: "2026-04-12T10:00:00.000Z",
+  updatedAt: "2026-04-12T10:00:00.000Z",
+  input: {
+    siteName: "현장명",
+    workDate: "2026-04-12",
+    contextText: "상황 설명",
+  },
+  result: {
+    riskRows: sampleRows,
+  },
+};
+
 describe("FormHistoryService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.localStorage.clear();
   });
 
-  it("create action payload를 form-history 함수로 전송한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-1",
-        formType: "risk-assessment",
-        taskName: "작업명",
-        siteName: "현장명",
-        workDate: "2026-04-12",
-        createdAt: "2026-04-12T10:00:00.000Z",
-        expiresAt: "2026-05-12T10:00:00.000Z",
-        rowCount: 1,
-      },
-    });
+  it("위험성평가 서식을 로그인 사용자 작업 기록으로 저장한다", async () => {
+    vi.mocked(UserWorkHistoryService.create).mockResolvedValue(storedRiskRecord);
 
     const result = await FormHistoryService.createRiskHistoryRecord({
       taskName: "작업명",
@@ -54,258 +64,109 @@ describe("FormHistoryService", () => {
       riskRows: sampleRows,
     });
 
-    expect(result.id).toBe("history-1");
-    expect(invokeBackend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        supabaseFunction: "form-history",
-        payload: expect.objectContaining({
-          action: "create",
-          payload: expect.objectContaining({
-            formType: "risk-assessment",
-            taskName: "작업명",
-            riskRows: sampleRows,
-          }),
-          scopeKey: expect.any(String),
-        }),
-      }),
-    );
-  });
-
-  it("위험성평가 create payload에 validation 메타를 optional로 포함한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-validation-1",
-        formType: "risk-assessment",
-        taskName: "작업명",
+    expect(UserWorkHistoryService.create).toHaveBeenCalledWith({
+      feature: "form-risk-assessment",
+      title: "작업명",
+      subtitle: "현장명 · 2026-04-12",
+      input: {
         siteName: "현장명",
         workDate: "2026-04-12",
-        createdAt: "2026-04-12T10:00:00.000Z",
-        expiresAt: "2026-05-12T10:00:00.000Z",
-        rowCount: 1,
+        contextText: "상황 설명",
+      },
+      result: {
+        riskRows: sampleRows,
+        validationSummary: undefined,
+        validationEvents: undefined,
       },
     });
+    expect(result).toMatchObject({ id: "history-1", formType: "risk-assessment", rowCount: 1 });
+  });
 
+  it("목록은 두 서식 기능만 계정 기록에서 조회한다", async () => {
+    vi.mocked(UserWorkHistoryService.list).mockResolvedValue([storedRiskRecord]);
+
+    const result = await FormHistoryService.listHistoryRecords();
+
+    expect(UserWorkHistoryService.list).toHaveBeenCalledWith([
+      "form-risk-assessment",
+      "form-accident-report",
+    ]);
+    expect(result[0]).toMatchObject({ taskName: "작업명", siteName: "현장명", workDate: "2026-04-12" });
+  });
+
+  it("기록을 다시 열 때 입력과 결과를 서식 상세 데이터로 복원한다", async () => {
+    vi.mocked(UserWorkHistoryService.get).mockResolvedValue(storedRiskRecord);
+
+    const detail = await FormHistoryService.getRiskHistoryRecord("history-1");
+
+    expect(UserWorkHistoryService.get).toHaveBeenCalledWith("history-1", "form-risk-assessment");
+    expect(detail.contextText).toBe("상황 설명");
+    expect(detail.riskRows).toEqual(sampleRows);
+    expect(detail.accidentData).toBeNull();
+  });
+
+  it("검증 메타데이터를 결과와 함께 보존한다", async () => {
     const validationSummary = {
       totalRows: 1,
       reviewRequiredRows: 1,
       okRows: 0,
-      hazardTypeCounts: {
-        감전: 1,
-      },
+      hazardTypeCounts: { 감전: 1 },
     };
-    const validationEvents = [
-      {
-        timestamp: "2026-04-17T00:00:00.000Z",
-        siteName: "현장명",
-        formType: "risk-assessment",
-        rowIndex: 0,
-        expectedHazardType: "감전",
-        detectedHazardType: "추락",
-        field: "currentMeasure",
-        reasonCode: "current_measure_mismatch",
-        rewritten: true,
-        finalStatus: "review_required",
-      },
-    ];
+    vi.mocked(UserWorkHistoryService.create).mockResolvedValue({
+      ...storedRiskRecord,
+      result: { ...storedRiskRecord.result, validationSummary },
+    });
 
     await FormHistoryService.createRiskHistoryRecord({
       taskName: "작업명",
-      siteName: "현장명",
-      workDate: "2026-04-12",
-      contextText: "상황 설명",
       riskRows: sampleRows,
       validationSummary,
-      validationEvents: validationEvents as any,
     });
 
-    expect(invokeBackend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payload: expect.objectContaining({
-          action: "create",
-          payload: expect.objectContaining({
-            validationSummary,
-            validationEvents,
-          }),
-        }),
-      }),
+    expect(UserWorkHistoryService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expect.objectContaining({ validationSummary }) }),
     );
   });
 
-  it("동일 브라우저에서는 scopeKey를 재사용한다", async () => {
-    vi.mocked(invokeBackend)
-      .mockResolvedValueOnce({ items: [] })
-      .mockResolvedValueOnce({ items: [] });
-
-    await FormHistoryService.listRiskHistoryRecords();
-    await FormHistoryService.listRiskHistoryRecords();
-
-    const firstPayload = vi.mocked(invokeBackend).mock.calls[0][0]?.payload as { scopeKey: string };
-    const secondPayload = vi.mocked(invokeBackend).mock.calls[1][0]?.payload as { scopeKey: string };
-
-    expect(firstPayload.scopeKey).toBeTruthy();
-    expect(secondPayload.scopeKey).toBe(firstPayload.scopeKey);
-  });
-
-  it("get action 응답을 상세 형식으로 파싱한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-2",
-        formType: "risk-assessment",
-        taskName: "리스크 점검",
-        siteName: "A현장",
-        workDate: "2026-04-10",
-        createdAt: "2026-04-10T09:00:00.000Z",
-        expiresAt: "2026-05-10T09:00:00.000Z",
-        rowCount: 1,
-        contextText: "작업 상황",
-        riskRows: sampleRows,
-        accidentData: null,
-      },
-    });
-
-    const detail = await FormHistoryService.getRiskHistoryRecord("history-2");
-
-    expect(detail.id).toBe("history-2");
-    expect(detail.riskRows).toHaveLength(1);
-    expect(detail.contextText).toBe("작업 상황");
-  });
-
-  it("get action 응답의 validation optional 필드를 파싱한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-3",
-        formType: "risk-assessment",
-        taskName: "리스크 점검",
-        siteName: "A현장",
-        workDate: "2026-04-10",
-        createdAt: "2026-04-10T09:00:00.000Z",
-        expiresAt: "2026-05-10T09:00:00.000Z",
-        rowCount: 1,
-        contextText: "작업 상황",
-        riskRows: sampleRows,
-        validationSummary: {
-          totalRows: 1,
-          reviewRequiredRows: 1,
-          okRows: 0,
-          hazardTypeCounts: { 감전: 1 },
-        },
-        validationEvents: [
-          {
-            timestamp: "2026-04-17T00:00:00.000Z",
-            siteName: "A현장",
-            formType: "risk-assessment",
-            rowIndex: 0,
-            expectedHazardType: "감전",
-            detectedHazardType: "추락",
-            field: "currentMeasure",
-            reasonCode: "current_measure_mismatch",
-            rewritten: true,
-            finalStatus: "review_required",
-          },
-        ],
-      },
-    });
-
-    const detail = await FormHistoryService.getRiskHistoryRecord("history-3");
-
-    expect(detail.validationSummary?.reviewRequiredRows).toBe(1);
-    expect(detail.validationEvents).toHaveLength(1);
-    expect(detail.validationEvents?.[0]?.field).toBe("currentMeasure");
-  });
-
-  it("get action 응답에서 validation 필드가 없어도 역호환 파싱을 유지한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-4",
-        formType: "risk-assessment",
-        taskName: "리스크 점검",
-        siteName: "A현장",
-        workDate: "2026-04-10",
-        createdAt: "2026-04-10T09:00:00.000Z",
-        expiresAt: "2026-05-10T09:00:00.000Z",
-        rowCount: 1,
-        contextText: "작업 상황",
-        riskRows: sampleRows,
-      },
-    });
-
-    const detail = await FormHistoryService.getRiskHistoryRecord("history-4");
-
-    expect(detail.validationSummary).toBeUndefined();
-    expect(detail.validationEvents).toBeUndefined();
-  });
-
-  it("산업재해조사표 create payload를 전송한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({
-      item: {
-        id: "history-accident-1",
-        formType: "accident-report",
-        taskName: "지게차 충돌 사고",
-        siteName: "B현장",
-        workDate: "2026-04-13",
-        createdAt: "2026-04-13T10:00:00.000Z",
-        expiresAt: "2026-05-13T10:00:00.000Z",
-        rowCount: 0,
-      },
+  it("산업재해조사표도 별도 기능 유형으로 저장한다", async () => {
+    const accidentData = {
+      administrativeInfo: {},
+      businessInfo: {},
+      victimInfo: {},
+      accidentDetails: {},
+      preventionPlan: {},
+    } as never;
+    vi.mocked(UserWorkHistoryService.create).mockResolvedValue({
+      ...storedRiskRecord,
+      feature: "form-accident-report",
+      title: "지게차 충돌 사고",
+      result: { accidentData },
     });
 
     await FormHistoryService.createAccidentHistoryRecord({
       taskName: "지게차 충돌 사고",
       siteName: "B현장",
       workDate: "2026-04-13",
-      contextText: "사고 발생 상황",
-      accidentData: {
-        administrativeInfo: {},
-        businessInfo: {},
-        victimInfo: {},
-        accidentDetails: {},
-        preventionPlan: {},
-      } as any,
+      accidentData,
     });
 
-    expect(invokeBackend).toHaveBeenCalledWith(
+    expect(UserWorkHistoryService.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        supabaseFunction: "form-history",
-        payload: expect.objectContaining({
-          action: "create",
-          payload: expect.objectContaining({
-            formType: "accident-report",
-            taskName: "지게차 충돌 사고",
-          }),
-          scopeKey: expect.any(String),
-        }),
+        feature: "form-accident-report",
+        title: "지게차 충돌 사고",
+        result: { accidentData },
       }),
     );
   });
 
-  it("delete action 요청 시 scopeKey와 recordId를 전송한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue({ ok: true });
+  it("삭제는 서식 기능 범위 안에서만 수행한다", async () => {
+    vi.mocked(UserWorkHistoryService.remove).mockResolvedValue();
 
-    await FormHistoryService.deleteRiskHistoryRecord("history-delete");
+    await FormHistoryService.deleteHistoryRecord("history-1");
 
-    expect(invokeBackend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        supabaseFunction: "form-history",
-        payload: expect.objectContaining({
-          action: "delete",
-          recordId: "history-delete",
-          scopeKey: expect.any(String),
-        }),
-      }),
-    );
-  });
-
-  it("delete action에서 백엔드 응답이 없으면 전용 에러를 반환한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue(null);
-
-    await expect(FormHistoryService.deleteRiskHistoryRecord("history-delete")).rejects.toThrow(
-      "FORM_HISTORY_DELETE_BACKEND_UNAVAILABLE",
-    );
-  });
-
-  it("백엔드 응답이 없으면 에러를 반환한다", async () => {
-    vi.mocked(invokeBackend).mockResolvedValue(null);
-
-    await expect(FormHistoryService.listRiskHistoryRecords()).rejects.toThrow("FORM_HISTORY_BACKEND_UNAVAILABLE");
+    expect(UserWorkHistoryService.remove).toHaveBeenCalledWith("history-1", [
+      "form-risk-assessment",
+      "form-accident-report",
+    ]);
   });
 });

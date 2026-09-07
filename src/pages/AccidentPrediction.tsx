@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { FeatureHistoryPanel } from "@/components/history/FeatureHistoryPanel";
 import {
   Upload,
   AlertTriangle,
@@ -24,6 +25,18 @@ import {
 } from "@/services/predictionService";
 import { fetchKoshaMachines, KoshaMachineData } from "@/data/KOSHADataset";
 import { toast } from "sonner";
+import {
+  UserWorkHistoryService,
+  type UserWorkRecordDetail,
+} from "@/services/userWorkHistoryService";
+
+interface PredictionHistoryInput {
+  mode: "text" | "image";
+  query: string;
+  fileName?: string;
+}
+
+type PredictionHistoryRecord = UserWorkRecordDetail<PredictionHistoryInput, PredictionResult>;
 
 type ScenarioImageStatus = "idle" | "loading" | "success" | "error";
 
@@ -293,14 +306,33 @@ export default function AccidentPrediction() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
   const [scenarioImageMap, setScenarioImageMap] = useState<Record<string, ScenarioImageState>>({});
   const [bundleExportMode, setBundleExportMode] = useState<"none" | "png" | "pdf">("none");
+  const [historyItems, setHistoryItems] = useState<PredictionHistoryRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [openingHistoryId, setOpeningHistoryId] = useState<string>();
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string>();
   const requestTokenRef = useRef(0);
   const scenarioImageMapRef = useRef<Record<string, ScenarioImageState>>({});
   const inFlightScenarioImageRequestsRef = useRef<
     Record<string, Promise<ScenarioImageGenerationResult | undefined>>
   >({});
 
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const items = await UserWorkHistoryService.list("accident-prediction");
+      setHistoryItems(items as unknown as PredictionHistoryRecord[]);
+    } catch {
+      setHistoryError("사고 예측 기록을 불러오지 못했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchKoshaMachines().then((data) => setMachines(data));
+    void loadHistory();
   }, []);
 
   useEffect(() => {
@@ -648,8 +680,26 @@ export default function AccidentPrediction() {
 
     try {
       const prediction = await predictionService.generatePrediction(query, selectedImage || undefined);
+      const historyInput: PredictionHistoryInput = {
+        mode: selectedImage ? "image" : "text",
+        query,
+        fileName: selectedImage?.name,
+      };
       setResult(prediction);
       setAnalyzedAt(new Date());
+      try {
+        const titleSource = query.trim() || selectedImage?.name || prediction.machineContext || "현장 사진";
+        const saved = await UserWorkHistoryService.create({
+          feature: "accident-prediction",
+          title: `${titleSource} 사고 예측`,
+          subtitle: `시나리오 ${prediction.scenarios.length}개 · ${selectedImage ? "사진" : "텍스트"} 분석`,
+          input: historyInput,
+          result: prediction,
+        });
+        setHistoryItems((previous) => [saved, ...previous.filter((item) => item.id !== saved.id)]);
+      } catch {
+        toast.error("분석 결과를 계정 기록에 저장하지 못했습니다.");
+      }
       toast.success("분석이 완료되었습니다.");
     } catch (error: unknown) {
       console.error(error);
@@ -657,6 +707,43 @@ export default function AccidentPrediction() {
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenHistory = async (item: PredictionHistoryRecord) => {
+    setOpeningHistoryId(item.id);
+    setHistoryError("");
+    try {
+      const record = await UserWorkHistoryService.get<PredictionHistoryInput, PredictionResult>(
+        item.id,
+        "accident-prediction",
+      );
+      requestTokenRef.current += 1;
+      clearImage();
+      setQuery(record.input.query ?? "");
+      setResult(record.result);
+      setAnalyzedAt(record.createdAt ? new Date(record.createdAt) : new Date());
+      setSelectedScenarioId(null);
+      setScenarioImageMap({});
+      inFlightScenarioImageRequestsRef.current = {};
+      setBundleExportMode("none");
+    } catch {
+      setHistoryError("선택한 사고 예측 기록을 다시 열지 못했습니다.");
+    } finally {
+      setOpeningHistoryId(undefined);
+    }
+  };
+
+  const handleDeleteHistory = async (item: PredictionHistoryRecord) => {
+    setDeletingHistoryId(item.id);
+    setHistoryError("");
+    try {
+      await UserWorkHistoryService.remove(item.id, "accident-prediction");
+      setHistoryItems((previous) => previous.filter((record) => record.id !== item.id));
+    } catch {
+      setHistoryError("사고 예측 기록을 삭제하지 못했습니다.");
+    } finally {
+      setDeletingHistoryId(undefined);
     }
   };
 
@@ -672,6 +759,19 @@ export default function AccidentPrediction() {
             기계명 또는 현장 사진을 입력하면 발생 가능한 사고를 분석해 시나리오 카드로 보여줍니다.
           </p>
         </header>
+
+        <FeatureHistoryPanel
+          items={historyItems}
+          onOpen={(item) => void handleOpenHistory(item)}
+          onDelete={(item) => void handleDeleteHistory(item)}
+          onRefresh={() => void loadHistory()}
+          heading="내 사고 예측 기록"
+          description="생성한 사고 시나리오를 계정별로 저장하고 다시 확인할 수 있습니다."
+          loading={historyLoading}
+          error={historyError}
+          openingId={openingHistoryId}
+          deletingId={deletingHistoryId}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-6">
           <div className="lg:col-span-5 bg-white rounded-radius-lg border border-neutral-200 shadow-sm p-space-6">

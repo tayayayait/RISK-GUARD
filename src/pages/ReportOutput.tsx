@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { SharePanel } from "@/components/assessment/SharePanel";
 import { RiskBadge } from "@/components/shared/RiskBadge";
 import { useAssessment } from "@/contexts/AssessmentContext";
 import { toast } from "@/hooks/use-toast";
@@ -166,7 +167,9 @@ export default function ReportOutput() {
             <div>
               <h4 className="text-label-md text-neutral-900 mb-1">위험등급</h4>
               <RiskBadge level={assessment.analysis.level} size="sm" />
-              <span className="ml-2 font-mono-num text-caption">{assessment.analysis.score}점</span>
+              <span className="ml-2 font-mono-num text-caption">
+                종합 참고지표 {assessment.analysis.score}점
+              </span>
             </div>
             {previewSections.map((section, index) => (
               <div key={section.id}>
@@ -328,6 +331,8 @@ export default function ReportOutput() {
           />
           <p className="text-caption text-neutral-500 mt-space-2">{briefingText.length}/300자</p>
         </div>
+
+        <SharePanel />
       </div>
 
       <div className="flex justify-between mt-space-6">

@@ -5,6 +5,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AssessmentProvider } from "@/contexts/AssessmentContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { StepRouteGuard } from "@/components/layout/StepRouteGuard";
 import {
   AccidentPredictionPage,
@@ -14,9 +16,12 @@ import {
   FormCenterPage,
   FormEditorPage,
   MaterialsBoardPage,
+  LoginPage,
   NotFoundPage,
   ProfileReviewPage,
   ReportOutputPage,
+  ScanUnderstandPage,
+  SafetyQaPage,
   SettingsPage,
 } from "@/lib/routeComponents";
 
@@ -44,74 +49,83 @@ function withRouteBoundary(element: JSX.Element) {
 
 function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
-        <Route element={<AssessmentRouteScope />}>
-          <Route
-            path="/"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="input">
-                <AssessmentInputPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/new"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="input">
-                <AssessmentInputPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/:id/profile-review"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="profile_review">
-                <ProfileReviewPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/:id/analysis"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="analysis">
-                <AnalysisResultPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/:id/evidence"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="evidence">
-                <EvidenceBoardPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/:id/materials"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="materials">
-                <MaterialsBoardPage />
-              </StepRouteGuard>,
-            )}
-          />
-          <Route
-            path="/assessments/:id/report"
-            element={withRouteBoundary(
-              <StepRouteGuard targetStep="report">
-                <ReportOutputPage />
-              </StepRouteGuard>,
-            )}
-          />
+        <Route path="/login" element={withRouteBoundary(<LoginPage />)} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AssessmentRouteScope />}>
+            <Route
+              path="/"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="input">
+                  <AssessmentInputPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/new"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="input">
+                  <AssessmentInputPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/:id/profile-review"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="profile_review">
+                  <ProfileReviewPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/:id/analysis"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="analysis">
+                  <AnalysisResultPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/:id/evidence"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="evidence">
+                  <EvidenceBoardPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/:id/materials"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="materials">
+                  <MaterialsBoardPage />
+                </StepRouteGuard>,
+              )}
+            />
+            <Route
+              path="/assessments/:id/report"
+              element={withRouteBoundary(
+                <StepRouteGuard targetStep="report">
+                  <ReportOutputPage />
+                </StepRouteGuard>,
+              )}
+            />
+          </Route>
+
+          <Route path="/forms" element={withRouteBoundary(<FormCenterPage />)} />
+          <Route path="/forms/:formType" element={withRouteBoundary(<FormEditorPage />)} />
+          <Route path="/prediction" element={withRouteBoundary(<AccidentPredictionPage />)} />
+          <Route path="/scan" element={withRouteBoundary(<ScanUnderstandPage />)} />
+          <Route path="/safety-qa" element={withRouteBoundary(<SafetyQaPage />)} />
+          <Route path="/qa" element={withRouteBoundary(<SafetyQaPage />)} />
+          <Route path="/settings" element={withRouteBoundary(<SettingsPage />)} />
+          <Route path="*" element={withRouteBoundary(<NotFoundPage />)} />
         </Route>
-
-        {/* Forms Routes */}
-        <Route path="/forms" element={withRouteBoundary(<FormCenterPage />)} />
-        <Route path="/forms/:formType" element={withRouteBoundary(<FormEditorPage />)} />
-        <Route path="/prediction" element={withRouteBoundary(<AccidentPredictionPage />)} />
-        <Route path="/settings" element={withRouteBoundary(<SettingsPage />)} />
-
-        <Route path="*" element={withRouteBoundary(<NotFoundPage />)} />
       </Routes>
     </BrowserRouter>
   );
@@ -119,11 +133,13 @@ function AppRouter() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AppRouter />
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AppRouter />
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

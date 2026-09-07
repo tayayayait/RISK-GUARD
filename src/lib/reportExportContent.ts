@@ -12,7 +12,7 @@ export interface ReportExportSection {
 }
 
 const EXCLUDED_SECTION_IDS = new Set(["header", "checklist", "briefing"]);
-const REVIEW_BODY_ORDER = ["overview", "profile", "hazards", "risk-level", "law-remedial-actions", "improvements"];
+const REVIEW_BODY_ORDER = ["overview", "profile", "hazards", "risk-level", "risk-table", "law-remedial-actions", "improvements", "participants", "share-records"];
 const REVIEW_APPENDIX_ORDER = ["disaster-cases", "fatality-warning", "law-guide", "materials"];
 
 function normalizeText(value: string | undefined) {
@@ -77,6 +77,7 @@ function buildSubmissionSections(baseSections: ReportSection[]): ReportExportSec
   appendIfExists("overview");
   appendIfExists("hazards");
   appendIfExists("risk-level");
+  appendIfExists("risk-table");
 
   const lawRemedial = normalizeText(byId.get("law-remedial-actions")?.content);
   const improvements = normalizeText(byId.get("improvements")?.content);
@@ -103,6 +104,11 @@ function buildSubmissionSections(baseSections: ReportSection[]): ReportExportSec
     order,
     group: "body",
   });
+  order += 1;
+
+  // 참여자·공유 기록은 시행규칙 제37조의4가 요구하는 보존 항목이라 제출용에서도 뺄 수 없다.
+  appendIfExists("participants");
+  appendIfExists("share-records");
 
   return sections;
 }

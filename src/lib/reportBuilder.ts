@@ -1,4 +1,14 @@
-﻿import type { AssessmentData, ReportSection } from "@/types/assessment";
+﻿import {
+  PARTICIPANT_ROLE_LABELS,
+  PARTICIPATION_METHOD_LABELS,
+  SHARE_METHOD_LABELS,
+  SHARE_PHASE_LABELS,
+} from "@/types/assessment";
+import type { AssessmentData, ReportSection } from "@/types/assessment";
+import {
+  IMPROVEMENT_STATUS_LABELS,
+  RISK_ACCEPTABILITY_LABELS,
+} from "@/types/formTemplate";
 
 function toBullets(items: string[]) {
   if (!items.length) {
@@ -692,6 +702,82 @@ function resolveChecklistItems(assessment: AssessmentData) {
   return buildDefaultChecklistItems(assessment);
 }
 
+function orDash(value: string | undefined) {
+  const text = (value ?? "").trim();
+  return text.length > 0 ? text : "-";
+}
+
+function inlineText(value: string | undefined) {
+  return orDash(value).replace(/\r?\n/g, " / ");
+}
+
+/** 시행규칙 제37조제1항: 유해·위험요인별 위험성 결정과 감소대책 이행 내용 */
+function formatRiskRows(assessment: AssessmentData) {
+  const rows = assessment.riskRows ?? [];
+  if (rows.length === 0) {
+    return "위험성평가표 데이터 없음";
+  }
+
+  return rows
+    .map((row, index) => {
+      const acceptability = row.acceptability
+        ? RISK_ACCEPTABILITY_LABELS[row.acceptability]
+        : "미판정";
+      const postAcceptability = row.postAcceptability
+        ? RISK_ACCEPTABILITY_LABELS[row.postAcceptability]
+        : "미판정";
+      const improvementStatus = row.improvementStatus
+        ? IMPROVEMENT_STATUS_LABELS[row.improvementStatus]
+        : "계획";
+
+      return [
+        `${index + 1}. ${orDash(row.workProcess)} | ${orDash(row.hazardFactor)}`,
+        `   - 분류/원인: ${inlineText(row.category)} / ${inlineText(row.cause)}`,
+        `   - 법적근거: ${inlineText(row.legalBasis)}`,
+        `   - 현재 조치: ${inlineText(row.currentMeasure)}`,
+        `   - 현재 위험성: ${orDash(row.riskLevel)} (${acceptability})`,
+        `   - 감소대책: ${inlineText(row.reductionMeasure)}`,
+        `   - 개선 후 위험성: ${orDash(row.postRiskLevel)} (${postAcceptability})`,
+        `   - 담당자/개선기한: ${orDash(row.responsiblePerson)} / ${orDash(row.improvementDate)}`,
+        `   - 이행 상태: ${improvementStatus} (완료일 ${orDash(row.completionDate)})`,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+/** 시행규칙 제37조의2, 제37조의4제1항제2호: 평가에 참여한 근로자 */
+function formatParticipants(assessment: AssessmentData) {
+  const participants = assessment.participants ?? [];
+  if (participants.length === 0) {
+    return "참여자 기록 없음";
+  }
+
+  return toBullets(participants.map((participant) => {
+    const affiliation = (participant.affiliation ?? "").trim();
+    const namePart = affiliation ? `${participant.name} (${affiliation})` : participant.name;
+    const role = PARTICIPANT_ROLE_LABELS[participant.role] ?? participant.role;
+    const method = PARTICIPATION_METHOD_LABELS[participant.method] ?? participant.method;
+    return `${namePart} · ${role} · ${method} · ${orDash(participant.participatedAt)}`;
+  }));
+}
+
+/** 시행규칙 제37조의3: 근로자에게 결과를 공유한 사실 */
+function formatShareRecords(assessment: AssessmentData) {
+  const records = assessment.shareRecords ?? [];
+  if (records.length === 0) {
+    return "공유 기록 없음";
+  }
+
+  return records
+    .map((record) => {
+      const phase = SHARE_PHASE_LABELS[record.phase] ?? record.phase;
+      const method = SHARE_METHOD_LABELS[record.method] ?? record.method;
+      const header = `- [${phase}] ${method} · ${orDash(record.sharedAt)} · 대상: ${inlineText(record.audienceNote)}`;
+      return `${header}\n  ${inlineText(record.content)}`;
+    })
+    .join("\n");
+}
+
 export function buildReportSectionsFromAssessment(assessment: AssessmentData): ReportSection[] {
   const improvementActions = buildDefaultImprovementActions(assessment);
   const checklistItems = resolveChecklistItems(assessment);
@@ -733,18 +819,25 @@ export function buildReportSectionsFromAssessment(assessment: AssessmentData): R
       order: 5,
     },
     {
+      id: "risk-table",
+      title: "위험성평가표",
+      content: formatRiskRows(assessment),
+      editable: true,
+      order: 6,
+    },
+    {
       id: "disaster-cases",
       title: "유사 재해사례 요약",
       content: formatCaseAndFatalityCitations(assessment, "case"),
       editable: true,
-      order: 6,
+      order: 7,
     },
     {
       id: "fatality-warning",
       title: "사망사고 기반 경고",
       content: formatCaseAndFatalityCitations(assessment, "fatality"),
       editable: true,
-      order: 7,
+      order: 8,
     },
     {
       id: "law-guide",
@@ -763,42 +856,56 @@ export function buildReportSectionsFromAssessment(assessment: AssessmentData): R
         formatCitationResourceLinks(assessment),
       ].join("\n").trim(),
       editable: true,
-      order: 8,
+      order: 9,
     },
     {
       id: "law-remedial-actions",
       title: "법령 기반 개선조치",
       content: formatLawRemedialActions(assessment),
       editable: true,
-      order: 9,
+      order: 10,
     },
     {
       id: "improvements",
       title: "권장 개선조치",
       content: toBullets(improvementActions),
       editable: true,
-      order: 10,
+      order: 11,
     },
     {
       id: "checklist",
       title: "작업 전 체크리스트",
       content: toBullets(checklistItems),
       editable: false,
-      order: 11,
+      order: 12,
     },
     {
       id: "materials",
       title: "추천 교육자료",
       content: formatSelectedMaterials(assessment),
       editable: true,
-      order: 12,
+      order: 13,
     },
     {
       id: "briefing",
       title: "작업 전 안전 브리핑 문안",
       content: assessment.briefingText || "브리핑 문안 없음",
       editable: true,
-      order: 13,
+      order: 14,
+    },
+    {
+      id: "participants",
+      title: "평가 참여자",
+      content: formatParticipants(assessment),
+      editable: false,
+      order: 15,
+    },
+    {
+      id: "share-records",
+      title: "결과 공유 기록",
+      content: formatShareRecords(assessment),
+      editable: false,
+      order: 16,
     },
   ];
 }

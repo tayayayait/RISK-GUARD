@@ -22,6 +22,9 @@ export const MOCK_REPORT_SECTIONS: ReportSection[] = [
 ];
 
 export const createMockAssessment = (): AssessmentData => ({
+  riskRows: [],
+  participants: [],
+  shareRecords: [],
   id: "mock-001",
   taskName: "외벽 도장 작업",
   taskDescription: "건설현장 내 고소작업대를 활용한 외벽 도장 작업입니다. 작업 높이는 약 15m이며, 유기용제 기반 도료를 사용합니다. 작업 인원은 3명이고, 초급 근로자 1명이 포함되어 있습니다.",

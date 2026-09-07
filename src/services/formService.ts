@@ -1,4 +1,5 @@
 import { normalizeHazardType } from "../../supabase/functions/_shared/hazard-taxonomy.ts";
+import { applyRiskFields, applyRiskFieldsToRows, formatRiskLevel } from "@/lib/riskRowAcceptability";
 import { HAZARD_ARTICLE_MAP } from "../../supabase/functions/_shared/hazard-article-map.ts";
 import type { AssessmentData, EvidenceItem, HazardItem, LawActionItem } from "@/types/assessment";
 import type { CompanyProfile } from "@/types/companyProfile";
@@ -2001,17 +2002,6 @@ const HAZARD_MEASURE_TEMPLATE: Record<string, { current: string[]; reduction: st
   },
 };
 
-function toRiskLabel(score: number) {
-  if (score >= 15) return "높음";
-  if (score >= 6) return "보통";
-  return "낮음";
-}
-
-function formatRiskLevel(frequency: number, severity: number) {
-  const score = frequency * severity;
-  return `${score}(${toRiskLabel(score)})`;
-}
-
 function normalizeSpace(text: string) {
   return text.replace(/\s+/g, " ").trim();
 }
@@ -3975,7 +3965,7 @@ export function createEmptyRiskAssessmentRow(seed: Partial<RiskAssessmentRow> = 
       .filter(Boolean)
     : [];
 
-  return {
+  return applyRiskFields({
     workProcess: seed.workProcess ?? "",
     category: normalizeRiskCategoryValue(seed.category ?? ""),
     cause: seed.cause ?? "",
@@ -3996,7 +3986,14 @@ export function createEmptyRiskAssessmentRow(seed: Partial<RiskAssessmentRow> = 
     expectedHazardType: normalizeSpace(seed.expectedHazardType ?? ""),
     detectedHazardType: normalizeSpace(seed.detectedHazardType ?? ""),
     controlIntent: seed.controlIntent,
-  };
+    acceptability: seed.acceptability,
+    acceptabilityBasis: seed.acceptabilityBasis,
+    postFrequency: seed.postFrequency,
+    postSeverity: seed.postSeverity,
+    postAcceptability: seed.postAcceptability,
+    improvementStatus: seed.improvementStatus,
+    completionNote: seed.completionNote,
+  });
 }
 
 const ACCIDENT_INJURY_TYPE_RULES: Array<{ pattern: RegExp; label: string }> = [
@@ -4420,7 +4417,8 @@ export const FormService = {
         severity,
         riskLevel: formatRiskLevel(frequency, severity),
         reductionMeasure: reductionMeasures[index] || "추가 개선 조치를 시행한다.",
-        postRiskLevel: "low",
+        // 허용 여부 / 개선 후 위험성은 applyRiskFields 가 산출한다 (하단 참조).
+        postRiskLevel: "",
         improvementDate: "",
         completionDate: "",
         responsiblePerson: "",
@@ -4451,12 +4449,19 @@ export const FormService = {
     }));
 
     const consistentRows = enforceRiskRowsConsistency(rowsWithLegalBasis, assessment, lawContext);
-    return validateRiskAssessmentRows(consistentRows, lawContext, {
+    const validated = validateRiskAssessmentRows(consistentRows, lawContext, {
       rewriteInvalidFields: true,
       clearUnresolvedFields: true,
       assessment,
       siteName: assessment.siteName,
     });
+
+    // 허용 여부·개선 후 위험성은 감소대책이 확정된 뒤에 산출한다.
+    // (검증 단계가 reductionMeasure 를 다시 쓸 수 있다.)
+    return {
+      ...validated,
+      rows: applyRiskFieldsToRows(validated.rows),
+    };
   },
 
   revalidateRiskAssessmentRows(

@@ -2,6 +2,33 @@ import type { RiskControlIntent } from "@/types/riskControlIntent";
 
 export type RiskValidationStatus = "ok" | "review_required";
 
+/** 시행규칙 제37조제1항제2호: 위험성 크기가 허용 가능한 수준인지 결정 */
+export type RiskAcceptability = "acceptable" | "not_acceptable";
+
+/** 개선대책 이행 상태 */
+export type ImprovementStatus = "planned" | "in_progress" | "done" | "deferred";
+
+export const RISK_ACCEPTABILITY_VALUES: RiskAcceptability[] = ["acceptable", "not_acceptable"];
+
+export const IMPROVEMENT_STATUS_VALUES: ImprovementStatus[] = [
+  "planned",
+  "in_progress",
+  "done",
+  "deferred",
+];
+
+export const RISK_ACCEPTABILITY_LABELS: Record<RiskAcceptability, string> = {
+  acceptable: "허용 가능",
+  not_acceptable: "허용 불가",
+};
+
+export const IMPROVEMENT_STATUS_LABELS: Record<ImprovementStatus, string> = {
+  planned: "계획",
+  in_progress: "진행중",
+  done: "완료",
+  deferred: "보류",
+};
+
 export type RiskValidationField =
   | "category"
   | "cause"
@@ -51,6 +78,21 @@ export interface RiskAssessmentRow {
   expectedHazardType?: string;
   detectedHazardType?: string;
   controlIntent?: RiskControlIntent;
+
+  /** 현재 위험성이 허용 가능한 수준인지 (시행규칙 제37조제1항제2호) */
+  acceptability?: RiskAcceptability;
+  /** 허용 여부 판단 근거 */
+  acceptabilityBasis?: string;
+  /** 개선 후 가능성(빈도) 1~5 */
+  postFrequency?: number;
+  /** 개선 후 중대성(강도) 1~5 */
+  postSeverity?: number;
+  /** 개선 후 재판정 결과 */
+  postAcceptability?: RiskAcceptability;
+  /** 개선대책 이행 상태 */
+  improvementStatus?: ImprovementStatus;
+  /** 완료 확인 메모 */
+  completionNote?: string;
 }
 
 export interface AccidentBusinessInfo {

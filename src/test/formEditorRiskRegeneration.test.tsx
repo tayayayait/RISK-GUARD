@@ -9,6 +9,7 @@ import { FormLawService } from "@/services/formLawService";
 import { FormService } from "@/services/formService";
 import { FormHistoryService } from "@/services/formHistoryService";
 import { RiskValidationAuditService } from "@/services/riskValidationAuditService";
+import { RiskAssessmentStoreService } from "@/services/riskAssessmentStoreService";
 import { RiskLegalBasisFitService } from "@/services/riskLegalBasisFitService";
 import { toast } from "@/hooks/use-toast";
 import * as documentBuilder from "@/lib/documentBuilder";
@@ -51,6 +52,20 @@ vi.mock("@/services/riskValidationAuditService", () => ({
     writeEvents: vi.fn(async () => ({ inserted: 0 })),
   },
 }));
+
+// 서식센터는 저장된 평가를 먼저 찾는다. 기본은 "저장된 것 없음"이라 기존 AI 경로가 그대로 돈다.
+vi.mock("@/services/riskAssessmentStoreService", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/riskAssessmentStoreService")>();
+  return {
+    ...actual,
+    RiskAssessmentStoreService: {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => {
+        throw new Error("RISK_ASSESSMENT_STORE_NOT_STUBBED");
+      }),
+    },
+  };
+});
 
 vi.mock("@/components/layout/DashboardShell", () => ({
   DashboardShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -214,6 +229,7 @@ function createRiskRowSeed(partial: Partial<RiskAssessmentRow>): RiskAssessmentR
     reviewReasonCodes: partial.reviewReasonCodes,
     expectedHazardType: partial.expectedHazardType,
     detectedHazardType: partial.detectedHazardType,
+    ...partial,
   };
 }
 
@@ -233,6 +249,104 @@ describe("FormEditor risk assessment regeneration flow", () => {
       status: "empty",
     });
     vi.mocked(RiskValidationAuditService.writeEvents).mockResolvedValue({ inserted: 0 });
+    vi.mocked(RiskAssessmentStoreService.list).mockResolvedValue([]);
+  });
+
+  it("reuses stored risk rows instead of running a second AI analysis", async () => {
+    const storedRows: RiskAssessmentRow[] = [
+      createRiskRowSeed({
+        cause: "stored-cause",
+        hazardFactor: "stored-hazard",
+        legalBasis: "산업안전보건기준에 관한 규칙 제42조",
+        acceptability: "not_acceptable",
+        postFrequency: 2,
+        postSeverity: 3,
+        postRiskLevel: "6(보통)",
+        postAcceptability: "acceptable",
+        improvementStatus: "in_progress",
+        responsiblePerson: "유창제",
+      }),
+    ];
+
+    const summary = {
+      id: "stored-assessment-1",
+      taskName: "저장된 작업",
+      siteName: "",
+      workDate: "2026-04-08",
+      industry: "건설업",
+      workLocation: "현장",
+      evaluator: "유창제",
+      referenceScore: 72,
+      referenceLevel: "high",
+      status: "confirmed",
+      createdAt: "2026-04-08T00:00:00.000Z",
+      updatedAt: "2026-04-09T00:00:00.000Z",
+      retainUntil: "2029-04-08T00:00:00.000Z",
+    };
+
+    vi.mocked(RiskAssessmentStoreService.list).mockResolvedValue([summary] as never);
+    vi.mocked(RiskAssessmentStoreService.get).mockResolvedValue({
+      ...summary,
+      taskDescription: "저장된 작업 설명",
+      analysisSnapshot: {},
+      riskRows: storedRows,
+      participants: [],
+      shareRecords: [],
+    } as never);
+
+    render(
+      <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
+        <Routes>
+          <Route path="/forms/:formType" element={<FormEditor />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fillRequiredInputs(
+      "저장된 작업",
+      "작업자가 이동식 비계 위에서 외벽 도장 작업을 수행하는 과정에서 추락 위험이 있는 상태다.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^AI 분석 및 서식 자동작성$/ }));
+
+    await waitFor(() => {
+      expect(latestRiskRows).toHaveLength(storedRows.length);
+    });
+
+    expect(vi.mocked(analyzeTaskToAssessment)).not.toHaveBeenCalled();
+    expect(vi.mocked(RiskAssessmentStoreService.get)).toHaveBeenCalledWith("stored-assessment-1");
+    expect(latestRiskRows[0]?.cause).toBe("stored-cause");
+    expect(latestRiskRows[0]?.postRiskLevel).toBe("6(보통)");
+    expect(latestRiskRows[0]?.improvementStatus).toBe("in_progress");
+  });
+
+  it("falls back to AI analysis when no stored assessment matches", async () => {
+    const fixture = buildRiskAssessmentFixture(
+      "미저장 작업",
+      "작업자가 고소 작업대에서 외벽 마감 작업을 수행하며 추락 위험에 노출된 상태다.",
+    );
+    vi.mocked(analyzeTaskToAssessment).mockResolvedValueOnce(fixture);
+    vi.mocked(RiskAssessmentStoreService.list).mockRejectedValueOnce(
+      new Error("EDGE_FUNCTIONS_DISABLED"),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/forms/risk-assessment"]}>
+        <Routes>
+          <Route path="/forms/:formType" element={<FormEditor />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fillRequiredInputs(
+      "미저장 작업",
+      "작업자가 고소 작업대에서 외벽 마감 작업을 수행하며 추락 위험에 노출된 상태다.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^AI 분석 및 서식 자동작성$/ }));
+
+    await waitFor(() => {
+      expect(vi.mocked(analyzeTaskToAssessment)).toHaveBeenCalledTimes(1);
+      expect(latestRiskRows.length).toBeGreaterThan(0);
+    });
   });
 
   it("replaces existing rows with newly generated rows on rerun", async () => {

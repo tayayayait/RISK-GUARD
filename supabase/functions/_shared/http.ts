@@ -1,12 +1,12 @@
 export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-risk-guard-source",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 export function handlePreflight(req: Request) {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { status: 200, headers: CORS_HEADERS });
   }
   return null;
 }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AccidentPrediction, { partitionScenarioBundleItems } from "@/pages/AccidentPrediction";
 import { predictionService } from "@/services/predictionService";
 import { fetchKoshaMachines } from "@/data/KOSHADataset";
+import { UserWorkHistoryService } from "@/services/userWorkHistoryService";
 
 vi.mock("@/components/layout/DashboardShell", () => ({
   DashboardShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -20,6 +21,15 @@ vi.mock("@/data/KOSHADataset", () => ({
   fetchKoshaMachines: vi.fn(async () => []),
 }));
 
+vi.mock("@/services/userWorkHistoryService", () => ({
+  UserWorkHistoryService: {
+    create: vi.fn(),
+    list: vi.fn(),
+    get: vi.fn(),
+    remove: vi.fn(),
+  },
+}));
+
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -30,6 +40,18 @@ vi.mock("sonner", () => ({
 describe("AccidentPrediction page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(UserWorkHistoryService.list).mockResolvedValue([]);
+    vi.mocked(UserWorkHistoryService.create).mockResolvedValue({
+      id: "prediction-history-1",
+      feature: "accident-prediction",
+      title: "press 사고 예측",
+      subtitle: "시나리오 3개",
+      createdAt: "2026-08-20T01:00:00.000Z",
+      updatedAt: "2026-08-20T01:00:00.000Z",
+      input: { query: "press", mode: "text" },
+      result: { scenarios: [] },
+    });
+    vi.mocked(UserWorkHistoryService.remove).mockResolvedValue();
     vi.mocked(fetchKoshaMachines).mockResolvedValue([]);
     vi.mocked(predictionService.generatePrediction).mockResolvedValue({
       scenarios: [
@@ -83,6 +105,46 @@ describe("AccidentPrediction page", () => {
     expect(screen.getByText("시나리오 3")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "통합 이미지 다운로드" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF 다운로드" })).toBeInTheDocument();
+    expect(UserWorkHistoryService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "accident-prediction",
+        title: "press 사고 예측",
+        input: expect.objectContaining({ query: "press", mode: "text" }),
+      }),
+    );
+  });
+
+  it("opens and deletes a saved prediction from account history", async () => {
+    const savedResult = await predictionService.generatePrediction("press");
+    const historyRecord = {
+      id: "prediction-history-2",
+      feature: "accident-prediction" as const,
+      title: "프레스 이전 예측",
+      subtitle: "시나리오 3개",
+      createdAt: "2026-08-20T01:00:00.000Z",
+      updatedAt: "2026-08-20T02:00:00.000Z",
+      input: { query: "프레스", mode: "text" },
+      result: savedResult,
+    };
+    vi.mocked(UserWorkHistoryService.list).mockResolvedValue([historyRecord]);
+    vi.mocked(UserWorkHistoryService.get).mockResolvedValue(historyRecord);
+
+    render(<AccidentPrediction />);
+
+    expect(await screen.findByText("프레스 이전 예측")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "프레스 이전 예측 열기" }));
+
+    await waitFor(() => {
+      expect(UserWorkHistoryService.get).toHaveBeenCalledWith("prediction-history-2", "accident-prediction");
+      expect(screen.getByDisplayValue("프레스")).toBeInTheDocument();
+      expect(screen.getByText("시나리오 1")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "프레스 이전 예측 삭제" }));
+    await waitFor(() => {
+      expect(UserWorkHistoryService.remove).toHaveBeenCalledWith("prediction-history-2", "accident-prediction");
+      expect(screen.queryByText("프레스 이전 예측")).not.toBeInTheDocument();
+    });
   });
 
   it("loads selected scenario visualization when card is clicked", async () => {

@@ -5,6 +5,8 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAssessment } from "@/contexts/AssessmentContext";
+import { RiskRowSection } from "@/components/assessment/RiskRowSection";
+import { ParticipantPanel } from "@/components/assessment/ParticipantPanel";
 import { buildStandardsRulesPdfUrl } from "@/lib/lawOriginalText";
 import type { EvidenceItem, LawActionItem, LawActionStage, LawFitStatus } from "@/types/assessment";
 import { HAZARD_ARTICLE_MAP } from "../../supabase/functions/_shared/hazard-article-map.ts";
@@ -1942,6 +1944,10 @@ export default function AnalysisResult() {
             )}
           </div>
         </section>
+
+        <RiskRowSection />
+
+        <ParticipantPanel />
 
         <div className="flex justify-end">
           <Button type="button" onClick={() => void handleGoToEvidence()} disabled={isPreparingEvidence}>

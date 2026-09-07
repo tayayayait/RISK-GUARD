@@ -68,6 +68,12 @@ describe("ProfileReview", () => {
       exportReport: vi.fn(async () => ({ ok: true, message: "ok" })),
       canAccessStep: vi.fn(() => true),
       getStepRoute: vi.fn(() => "/assessments/new"),
+      updateRiskRow: vi.fn(),
+      addParticipant: vi.fn(async () => undefined),
+      removeParticipant: vi.fn(async () => undefined),
+      addShareRecord: vi.fn(async () => undefined),
+      removeShareRecord: vi.fn(async () => undefined),
+      retrySave: vi.fn(async () => undefined),
     };
 
     vi.mocked(useAssessment).mockReturnValue(mockContext);

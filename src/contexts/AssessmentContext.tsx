@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createMockAssessment } from "@/data/mockData";
 import { buildDefaultChecklistItems, buildReportSectionsFromAssessment } from "@/lib/reportBuilder";
 import type { AnalyzeTaskInput } from "@/services/geminiService";
@@ -8,6 +8,20 @@ import { applyGeminiAnalysis, buildAnalyzingAssessment, buildAnalysisFailedAsses
 import { KoshaService } from "@/services/koshaService";
 import { AssessmentLawService } from "@/services/assessmentLawService";
 import { ReportService } from "@/services/reportService";
+import { FormService } from "@/services/formService";
+import {
+  RiskAssessmentStoreService,
+  type ParticipantInput,
+  type ShareInput,
+} from "@/services/riskAssessmentStoreService";
+import { isPersistable, toUpsertPayload } from "@/lib/assessmentPersistence";
+import { applyRiskFields } from "@/lib/riskRowAcceptability";
+import type {
+  AssessmentParticipant,
+  AssessmentShareRecord,
+} from "@/types/assessment";
+import type { RiskAssessmentRow } from "@/types/formTemplate";
+
 import {
   calculateRiskScore,
   DEFAULT_API_STATUSES,
@@ -56,7 +70,17 @@ interface AssessmentContextType {
   exportReport: (format: ExportFormat, profile: ReportProfile) => Promise<{ ok: boolean; message: string }>;
   canAccessStep: (step: AssessmentStep) => boolean;
   getStepRoute: (step: AssessmentStep) => string;
+  /** 위험성평가표 행 편집. 저장된 평가는 행 단위로 패치한다. */
+  updateRiskRow: (rowIndex: number, patch: Partial<RiskAssessmentRow>) => void;
+  addParticipant: (input: ParticipantInput) => Promise<void>;
+  removeParticipant: (participantId: string) => Promise<void>;
+  addShareRecord: (input: ShareInput) => Promise<void>;
+  removeShareRecord: (shareId: string) => Promise<void>;
+  retrySave: () => Promise<void>;
 }
+
+/** 셀 편집이 멈춘 뒤 저장까지의 대기 시간. */
+const SAVE_DEBOUNCE_MS = 2000;
 
 const AssessmentContext = createContext<AssessmentContextType | null>(null);
 
@@ -194,36 +218,168 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
   const [isLoading, setIsLoading] = useState(false);
   const evidenceLoadPromiseRef = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
-    if (!assessment) {
+  const latestAssessmentRef = useRef<AssessmentData | null>(null);
+  const saveInFlightRef = useRef(false);
+  const persistedIdRef = useRef<string | undefined>(undefined);
+
+  latestAssessmentRef.current = assessment;
+
+  // 실제 저장. saveState 는 서버 응답 결과만 반영한다.
+  // (이전 구현은 setTimeout 으로 "저장됨"을 찍기만 하고 아무것도 쓰지 않았다.)
+  const persistNow = useCallback(async () => {
+    const current = latestAssessmentRef.current;
+    if (!isPersistable(current) || saveInFlightRef.current) {
       return;
     }
 
-    if (assessment.saveState.status !== "saving") {
-      return;
-    }
+    saveInFlightRef.current = true;
 
-    const timer = window.setTimeout(() => {
+    try {
+      const detail = await RiskAssessmentStoreService.upsert(
+        toUpsertPayload(current),
+        persistedIdRef.current,
+      );
+
+      persistedIdRef.current = detail.id;
+
+      setAssessmentState((prev) =>
+        prev
+          ? {
+              ...prev,
+              persistedId: detail.id,
+              saveState: {
+                status: "saved",
+                dirty: false,
+                lastSavedAt: detail.updatedAt || new Date().toISOString(),
+              },
+            }
+          : prev,
+      );
+    } catch (error) {
+      console.error("[Assessment] Failed to save assessment.", error);
       setAssessmentState((prev) =>
         prev
           ? {
               ...prev,
               saveState: {
-                status: "saved",
-                dirty: false,
-                lastSavedAt: new Date().toISOString(),
+                ...prev.saveState,
+                status: "error",
+                dirty: true,
               },
             }
           : prev,
       );
-    }, 300);
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!assessment?.saveState.dirty || assessment.saveState.status === "error") {
+      return;
+    }
+
+    if (!isPersistable(assessment)) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void persistNow();
+    }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [assessment?.saveState.status, assessment]);
+  }, [assessment, persistNow]);
+
+  const retrySave = useCallback(async () => {
+    setAssessmentState((prev) =>
+      prev ? { ...prev, saveState: { ...prev.saveState, status: "saving", dirty: true } } : prev,
+    );
+    await persistNow();
+  }, [persistNow]);
 
   const setAssessment = (data: AssessmentData) => {
+    // 새 평가로 교체되면 서버 레코드 연결도 끊는다.
+    if (data.id !== latestAssessmentRef.current?.id) {
+      persistedIdRef.current = data.persistedId;
+    }
     setAssessmentState(data);
     setCurrentStepState(data.currentStep);
+  };
+
+  const updateRiskRow = (rowIndex: number, patch: Partial<RiskAssessmentRow>) => {
+    setAssessmentState((prev) => {
+      if (!prev || rowIndex < 0 || rowIndex >= prev.riskRows.length) {
+        return prev;
+      }
+
+      const nextRows = prev.riskRows.map((row, index) =>
+        index === rowIndex ? applyRiskFields({ ...row, ...patch }) : row,
+      );
+
+      return markSaving({ ...prev, riskRows: nextRows });
+    });
+  };
+
+  const addParticipant = async (input: ParticipantInput) => {
+    const assessmentId = persistedIdRef.current;
+    if (!assessmentId) {
+      throw new Error("ASSESSMENT_NOT_SAVED");
+    }
+
+    const participant = await RiskAssessmentStoreService.addParticipant(assessmentId, input);
+    setAssessmentState((prev) =>
+      prev ? { ...prev, participants: [...prev.participants, participant] } : prev,
+    );
+  };
+
+  const removeParticipant = async (participantId: string) => {
+    const assessmentId = persistedIdRef.current;
+    if (!assessmentId) {
+      throw new Error("ASSESSMENT_NOT_SAVED");
+    }
+
+    await RiskAssessmentStoreService.removeParticipant(assessmentId, participantId);
+    setAssessmentState((prev) =>
+      prev
+        ? {
+            ...prev,
+            participants: prev.participants.filter(
+              (item: AssessmentParticipant) => item.id !== participantId,
+            ),
+          }
+        : prev,
+    );
+  };
+
+  const addShareRecord = async (input: ShareInput) => {
+    const assessmentId = persistedIdRef.current;
+    if (!assessmentId) {
+      throw new Error("ASSESSMENT_NOT_SAVED");
+    }
+
+    const record = await RiskAssessmentStoreService.addShareRecord(assessmentId, input);
+    setAssessmentState((prev) =>
+      prev ? { ...prev, shareRecords: [record, ...prev.shareRecords] } : prev,
+    );
+  };
+
+  const removeShareRecord = async (shareId: string) => {
+    const assessmentId = persistedIdRef.current;
+    if (!assessmentId) {
+      throw new Error("ASSESSMENT_NOT_SAVED");
+    }
+
+    await RiskAssessmentStoreService.removeShareRecord(assessmentId, shareId);
+    setAssessmentState((prev) =>
+      prev
+        ? {
+            ...prev,
+            shareRecords: prev.shareRecords.filter(
+              (item: AssessmentShareRecord) => item.id !== shareId,
+            ),
+          }
+        : prev,
+    );
   };
 
   const setCurrentStep = (step: AssessmentStep) => {
@@ -302,7 +458,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       const similarity = prev.analysis.fatalityCases.reduce((max, item) => Math.max(max, item.similarity), 0);
       const score = calculateRiskScore(normalizedProfile.hazards, normalizedProfile.equipment, similarity);
       const progressStep = resolveProgressStep(prev.currentStep, "analysis");
-      return markSaving({
+      const confirmed: AssessmentData = {
         ...prev,
         profile: normalizedProfile,
         analysis: {
@@ -312,6 +468,13 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
         },
         status: "analysis_ready",
         currentStep: progressStep,
+      };
+
+      // 프로필 확정 시점에 법정 위험성평가표를 만든다.
+      // 기존 매퍼를 그대로 쓰되, 호출 위치만 서식센터에서 주 흐름으로 옮긴 것이다.
+      return markSaving({
+        ...confirmed,
+        riskRows: FormService.mapAssessmentToRiskForm(confirmed),
       });
     });
 
@@ -791,8 +954,14 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       exportReport,
       canAccessStep,
       getStepRoute,
+      updateRiskRow,
+      addParticipant,
+      removeParticipant,
+      addShareRecord,
+      removeShareRecord,
+      retrySave,
     }),
-    [assessment, currentStep, isLoading],
+    [assessment, currentStep, isLoading, retrySave],
   );
 
   return <AssessmentContext.Provider value={value}>{children}</AssessmentContext.Provider>;

@@ -14,6 +14,9 @@ export function buildBaseAssessment(input: AnalyzeTaskInput): AssessmentData {
 
   return {
     id,
+    riskRows: [],
+    participants: [],
+    shareRecords: [],
     taskName: input.taskName.trim(),
     taskDescription: input.taskDescription.trim(),
     siteName: input.siteName?.trim() ?? "",

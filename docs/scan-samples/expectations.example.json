@@ -1,0 +1,11 @@
+{
+  "toluene-drum.jpg": {
+    "casNo": "108-88-3",
+    "pictograms": ["GHS02", "GHS07", "GHS08"]
+  },
+  "acetone-worn.jpg": {
+    "chemNameKor": "아세톤",
+    "casNo": "67-64-1"
+  },
+  "blurred-01.jpg": {}
+}

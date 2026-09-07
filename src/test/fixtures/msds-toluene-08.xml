@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <msdsItemCode>H</msdsItemCode>
+        <msdsItemNameKor>8. 노출방지 및 개인보호구</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H02</msdsItemCode>
+        <upMsdsItemCode>H</upMsdsItemCode>
+        <msdsItemNameKor>노출기준</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0202</msdsItemCode>
+        <upMsdsItemCode>H02</upMsdsItemCode>
+        <msdsItemNameKor>국내규정</msdsItemNameKor>
+        <itemDetail>|TWA : 50ppm |STEL : 150ppm(허용기준)</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0204</msdsItemCode>
+        <upMsdsItemCode>H02</upMsdsItemCode>
+        <msdsItemNameKor>ACGIH 규정</msdsItemNameKor>
+        <itemDetail>TWA 20 ppm</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0206</msdsItemCode>
+        <upMsdsItemCode>H02</upMsdsItemCode>
+        <msdsItemNameKor>생물학적 노출기준</msdsItemNameKor>
+        <itemDetail>소변 중 오르토 크레졸 : 0.3 mg/g creatinine</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H04</msdsItemCode>
+        <upMsdsItemCode>H</upMsdsItemCode>
+        <msdsItemNameKor>적절한 공학적 관리</msdsItemNameKor>
+        <itemDetail>국소배기장치를 설치하고 적절한 제어풍속을 유지하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H06</msdsItemCode>
+        <upMsdsItemCode>H</upMsdsItemCode>
+        <msdsItemNameKor>개인보호구</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0602</msdsItemCode>
+        <upMsdsItemCode>H06</upMsdsItemCode>
+        <msdsItemNameKor>호흡기 보호</msdsItemNameKor>
+        <itemDetail>한국산업안전보건공단 인증 유기화합물용 방독마스크를 착용하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0604</msdsItemCode>
+        <upMsdsItemCode>H06</upMsdsItemCode>
+        <msdsItemNameKor>눈 보호</msdsItemNameKor>
+        <itemDetail>화학물질용 보안경 또는 안면보호구를 착용하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0606</msdsItemCode>
+        <upMsdsItemCode>H06</upMsdsItemCode>
+        <msdsItemNameKor>손 보호</msdsItemNameKor>
+        <itemDetail>적절한 내화학성 장갑(니트릴/네오프렌)을 착용하시오.</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>H0608</msdsItemCode>
+        <upMsdsItemCode>H06</upMsdsItemCode>
+        <msdsItemNameKor>신체 보호</msdsItemNameKor>
+        <itemDetail>적절한 내화학성 보호복 및 안전화를 착용하시오.</itemDetail>
+      </item>
+    </items>
+  </body>
+</response>

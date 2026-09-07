@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload, Image, X, Sparkles, Info, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAssessment } from "@/contexts/AssessmentContext";
 import { cn } from "@/lib/utils";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { FeatureHistoryPanel, type FeatureHistoryItem } from "@/components/history/FeatureHistoryPanel";
+import {
+  RiskAssessmentStoreService,
+  type RiskAssessmentSummary,
+} from "@/services/riskAssessmentStoreService";
+import { restoreAssessmentFromDetail } from "@/lib/assessmentPersistence";
+import { resolveStepRoute } from "@/types/assessment";
+
+type AssessmentHistoryItem = RiskAssessmentSummary & FeatureHistoryItem;
+
+function toHistoryItem(item: RiskAssessmentSummary): AssessmentHistoryItem {
+  return {
+    ...item,
+    title: item.taskName,
+    subtitle: [item.siteName, item.workDate, item.status === "confirmed" ? "확정" : "작성 중"]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
 
 export default function AssessmentInput() {
   const navigate = useNavigate();
-  const { startAnalysis, setCurrentStep } = useAssessment();
+  const { startAnalysis, setAssessment, setCurrentStep } = useAssessment();
   const [taskName, setTaskName] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [siteName, setSiteName] = useState("");
@@ -22,10 +41,61 @@ export default function AssessmentInput() {
   const [formError, setFormError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
+  const [historyItems, setHistoryItems] = useState<AssessmentHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [openingHistoryId, setOpeningHistoryId] = useState<string>();
+  const [deletingHistoryId, setDeletingHistoryId] = useState<string>();
 
   const ANALYZE_STEPS = ["텍스트 분석 중...", "사진 분석 중...", "작업 프로필 정리 중..."];
 
   const isValid = taskName.length >= 2 && taskName.length <= 60 && taskDescription.length >= 20 && taskDescription.length <= 1000;
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const items = await RiskAssessmentStoreService.list(50);
+      setHistoryItems(items.map(toHistoryItem));
+    } catch {
+      setHistoryError("위험성평가 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
+
+  const handleOpenHistory = async (item: AssessmentHistoryItem) => {
+    setOpeningHistoryId(item.id);
+    setHistoryError("");
+    try {
+      const detail = await RiskAssessmentStoreService.get(item.id);
+      const restored = restoreAssessmentFromDetail(detail);
+      setAssessment(restored);
+      setCurrentStep(restored.currentStep);
+      navigate(resolveStepRoute(restored.currentStep, restored.id));
+    } catch {
+      setHistoryError("선택한 위험성평가를 다시 열지 못했습니다.");
+    } finally {
+      setOpeningHistoryId(undefined);
+    }
+  };
+
+  const handleDeleteHistory = async (item: AssessmentHistoryItem) => {
+    setDeletingHistoryId(item.id);
+    setHistoryError("");
+    try {
+      await RiskAssessmentStoreService.remove(item.id);
+      setHistoryItems((previous) => previous.filter((record) => record.id !== item.id));
+    } catch {
+      setHistoryError("위험성평가 기록을 삭제하지 못했습니다.");
+    } finally {
+      setDeletingHistoryId(undefined);
+    }
+  };
 
   const appendPhotos = useCallback(
     (files: File[]) => {
@@ -172,6 +242,21 @@ export default function AssessmentInput() {
         <div className="mb-space-8">
           <h1 className="text-heading-1 text-neutral-900 mb-space-2">위험성평가 시작</h1>
           <p className="text-body-lg text-neutral-500">작업 정보를 입력하면 AI가 자동으로 위험요인을 분석합니다.</p>
+        </div>
+
+        <div className="mb-space-6">
+          <FeatureHistoryPanel
+            items={historyItems}
+            onOpen={(item) => void handleOpenHistory(item)}
+            onDelete={(item) => void handleDeleteHistory(item)}
+            onRefresh={() => void loadHistory()}
+            heading="내 위험성평가 기록"
+            description="분석 단계와 편집 내용을 계정별로 저장합니다. 이전 작업을 이어서 진행할 수 있습니다."
+            loading={historyLoading}
+            error={historyError}
+            openingId={openingHistoryId}
+            deletingId={deletingHistoryId}
+          />
         </div>
 
         {formError && (

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <msdsItemCode>O</msdsItemCode>
+        <msdsItemNameKor>15. 법적 규제현황</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O02</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>산업안전보건법에 의한 규제</msdsItemNameKor>
+        <itemDetail>작업환경측정대상물질 (측정주기 : 6개월)|관리대상유해물질|특수건강진단대상물질 (진단주기 : 12개월)|노출기준설정물질</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O04</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>화학물질관리법에 의한 규제</msdsItemNameKor>
+        <itemDetail>사고대비물질|유독물질</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O06</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>위험물안전관리법에 의한 규제</msdsItemNameKor>
+        <itemDetail>4류 제1석유류(비수용성) (200L)</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O08</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>폐기물관리법에 의한 규제</msdsItemNameKor>
+        <itemDetail>지정폐기물</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O10</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>기타 국내 및 외국법에 의한 규제</msdsItemNameKor>
+        <itemDetail></itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O100402</msdsItemCode>
+        <upMsdsItemCode>O10</upMsdsItemCode>
+        <msdsItemNameKor>EU 분류정보(확정분류결과)</msdsItemNameKor>
+        <itemDetail>Flam. Liq. 2
+Repr. 2
+Asp. Tox. 1
+STOT RE 2</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>O12</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>화평법에 의한 규제</msdsItemNameKor>
+        <itemDetail>기존화학물질</itemDetail>
+      </item>
+      <item>
+        <msdsItemCode>UNKNOWN_999</msdsItemCode>
+        <upMsdsItemCode>O</upMsdsItemCode>
+        <msdsItemNameKor>미지의 규제 코드</msdsItemNameKor>
+        <itemDetail>알 수 없는 규제 내용</itemDetail>
+      </item>
+    </items>
+  </body>
+</response>

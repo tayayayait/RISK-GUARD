@@ -34,7 +34,6 @@ describe("FormCenter history list", () => {
         siteName: "A현장",
         workDate: "2026-04-12",
         createdAt: "2026-04-12T09:00:00.000Z",
-        expiresAt: "2026-05-12T09:00:00.000Z",
         rowCount: 2,
       },
     ]);
@@ -68,7 +67,6 @@ describe("FormCenter history list", () => {
         siteName: "현장 A",
         workDate: "2026-04-12",
         createdAt: "2026-04-12T09:00:00.000Z",
-        expiresAt: "2026-05-12T09:00:00.000Z",
         rowCount: 2,
       },
       {
@@ -78,7 +76,6 @@ describe("FormCenter history list", () => {
         siteName: "현장 B",
         workDate: "2026-04-13",
         createdAt: "2026-04-13T09:00:00.000Z",
-        expiresAt: "2026-05-13T09:00:00.000Z",
         rowCount: 0,
       },
     ]);
@@ -115,7 +112,6 @@ describe("FormCenter history list", () => {
         siteName: "현장 A",
         workDate: "2026-04-12",
         createdAt: "2026-04-12T09:00:00.000Z",
-        expiresAt: "2026-05-12T09:00:00.000Z",
         rowCount: 1,
       },
       {
@@ -125,7 +121,6 @@ describe("FormCenter history list", () => {
         siteName: "현장 B",
         workDate: "2026-04-12",
         createdAt: "2026-04-12T09:00:00.000Z",
-        expiresAt: "2026-05-12T09:00:00.000Z",
         rowCount: 2,
       },
     ]);

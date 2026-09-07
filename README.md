@@ -44,7 +44,7 @@ cp .env.example .env.local
 필수:
 
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_PUBLISHABLE_KEY` (권장) 또는 `VITE_SUPABASE_ANON_KEY` (레거시 호환)
 
 ## 문서
 
